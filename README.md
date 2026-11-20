@@ -44,6 +44,32 @@ flutter install -d <device-id>
 
 `android/local.properties` 里的 `sdk.dir` / `flutter.sdk` 按本机路径填写。
 
+### 先处理 path 依赖
+
+`pubspec.yaml` 里 `prism_ui` 与 `dynamic_color` 是**本地 path 依赖**，指向同机的
+FlClash 检出目录（作者本机是 `D:/coding/repos/FlClash/plugins/...`）。刚 clone 下来时
+这两个路径不存在，`flutter pub get` 会报 `Could not find a file named "pubspec.yaml"`。
+
+两种办法任选：
+
+```powershell
+# 1) 把 FlClash 拉到同一个相对位置
+git clone https://github.com/chen08209/FlClash.git D:\coding\repos\FlClash
+```
+
+```yaml
+# 2) 或者用 pubspec_overrides.yaml 覆盖成本机路径（推荐，不改主 pubspec）
+# pubspec_overrides.yaml
+dependency_overrides:
+  prism_ui:
+    path: /path/to/FlClash/plugins/prism_ui
+  dynamic_color:
+    path: /path/to/FlClash/plugins/dynamic_color
+```
+
+`prism_ui` 是 GPL-3.0、`dynamic_color` 是 Apache-2.0，所以 Hobo 整体按 GPL-3.0 发布，
+详见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)。
+
 ## 目录
 
 ```
@@ -182,7 +208,7 @@ flutter test                       # 26 个解析、时间、折叠头几何、�
 dart run tool/smoke.dart           # 真接口冒烟（可选：HOBO_COOKIE=…）
 ```
 
-### 真机 / 模拟器实测（Android 14，720×1280）
+### 真机 / 模拟器实测（雷电 Android 14，1080×2400 @440dpi）
 
 已在 `emulator-5554` 上安装并逐页走通：
 
@@ -197,6 +223,8 @@ dart run tool/smoke.dart           # 真接口冒烟（可选：HOBO_COOKIE=…�
 | 设置 | 账号卡、外观/浏览/互动/更新/数据/关于分组、深色模式切换、强调色、字号 |
 | 看图 / 视频 | 双指缩放翻页；video_player 带 Referer/Cookie 播放成功 |
 | 暗色主题 | 整套配色、底栏与卡片均正确切换 |
+| **检查更新（1.05 起）** | 设置 → 检查更新直接进内置网页，标题是站点标题，页面完整渲染（`https://ashshay.github.io/hobo/`） |
+| **用浏览器打开（1.05 起）** | 内置网页顶栏第二枚按钮把当前地址交给系统浏览器，落到 `com.android.browser/.BrowserActivity`；地址栏是当前页而不是入口页 |
 
 数据层另外用登录态 Cookie 跑过 `tool/smoke.dart`：推荐流 17 条、详情、热门评论 20 条、热搜前 5 全部解析正常。
 
