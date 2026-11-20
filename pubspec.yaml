@@ -1,0 +1,41 @@
+name: hobo
+description: "Hobo — 微博客户端，prism_ui 设计语言，Flutter 实现。"
+publish_to: 'none'
+
+version: 1.05.0+6
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # 与 FlClash 完全一致的底栏 / 卡片 / 弹层 / 转场。
+  prism_ui:
+    path: D:/coding/repos/FlClash/plugins/prism_ui
+  # Android 12+ 的壁纸取色（Monet）。
+  dynamic_color:
+    path: D:/coding/repos/FlClash/plugins/dynamic_color
+  dio: ^5.11.1
+  shared_preferences: ^2.5.6
+  path_provider: ^2.1.6
+  provider: ^6.1.5
+  video_player: ^2.11.1
+  webview_flutter: ^4.14.1
+  image_picker: ^1.2.4
+  package_info_plus: ^10.2.2
+  path: ^1.9.1
+  crypto: ^3.0.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: false
+  assets:
+    # 应用图标方图：关于页与设置页按「应用图标」设置裁成圆角矩形或圆形。
+    - assets/icon/hobo_icon.png
+    # 设置 → 关于 → 捐赠 里的赞赏码。
+    - assets/donate/donate_qr.png

@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hobo · prism 设计语言的微博客户端</title>
+<meta name="description" content="Hobo 是一个第三方微博客户端：Cobo 的 Flutter 重写版，界面基于 FlClash 的 prism_ui 设计语言。开源、无遥测、登录态只存在本机。">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0e120c">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Hobo · prism 设计语言的微博客户端">
+<meta property="og:description" content="Cobo 的 Flutter 重写版。液态玻璃底栏、折叠头、九宫格、多档视频；开源、无遥测。">
+<meta property="og:image" content="assets/shot-feed.webp">
+<meta property="og:url" content="https://ashshay.github.io/hobo/">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <img src="assets/icon-192.png" width="30" height="30" alt="" aria-hidden="true">
+      <span>Hobo<small>for Weibo</small></span>
+    </a>
+    <nav class="nav" aria-label="页面导航">
+      <a href="#features">功能</a>
+      <a href="#screens">截图</a>
+      <a href="#install">安装</a>
+      <a href="#changelog">更新日志</a>
+      <a href="https://github.com/ashshay/hobo">源码</a>
+    </nav>
+    <a class="btn btn--primary header-cta" href="https://github.com/ashshay/hobo/releases/latest">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>
+      下载
+    </a>
+  </div>
+</header>
+
+<main id="main">
+  <div id="top"></div>
+
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <p class="badge">
+          <span class="dot" aria-hidden="true"></span>
+          最新版本 <strong>1.05.0</strong> · build 7
+        </p>
+        <h1>微博客户端，<br><span>换个做法</span>。</h1>
+        <p class="hero-lead">
+          Hobo 是 Cobo 的 Flutter 重写版：同一套微博接口与容错规则，界面换成
+          FlClash 的 prism 设计语言——液态玻璃底栏、按压回弹、跟手返回转场。
+          登录态只存在本机，没有遥测，没有后台服务。
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn--primary" href="https://github.com/ashshay/hobo/releases/latest">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>
+            下载最新版
+          </a>
+          <a class="btn btn--ghost" href="https://github.com/ashshay/hobo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5C5.73.5.99 5.24.99 11.5c0 4.86 3.15 8.98 7.52 10.44.55.1.75-.24.75-.53v-1.86c-3.06.67-3.7-1.47-3.7-1.47-.5-1.27-1.23-1.61-1.23-1.61-1-.68.08-.67.08-.67 1.11.08 1.7 1.14 1.7 1.14.99 1.69 2.6 1.2 3.23.92.1-.72.39-1.2.7-1.48-2.44-.28-5.01-1.22-5.01-5.45 0-1.2.43-2.19 1.14-2.96-.12-.28-.5-1.4.1-2.92 0 0 .93-.3 3.05 1.13a10.5 10.5 0 0 1 2.77-.37c.94 0 1.89.13 2.78.37 2.11-1.43 3.04-1.13 3.04-1.13.6 1.52.22 2.64.11 2.92.71.77 1.14 1.76 1.14 2.96 0 4.24-2.58 5.17-5.03 5.44.4.34.75 1.01.75 2.04v3.02c0 .3.2.64.76.53a11.01 11.01 0 0 0 7.51-10.44C23.01 5.24 18.27.5 12 .5Z"/></svg>
+            查看源码
+          </a>
+        </div>
+        <ul class="hero-meta">
+          <li>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18.5h2"/></svg>
+            Android 7.0+
+          </li>
+          <li>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M9 9h6v6H9z"/></svg>
+            arm64 · 约 20 MB
+          </li>
+          <li>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="10.5" width="16" height="10.5" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+            无需 Google 服务
+          </li>
+        </ul>
+      </div>
+
+      <div class="device">
+        <img src="assets/shot-feed.webp" width="540" height="1200" alt="Hobo 信息流界面：顶栏头像与操作按钮、带九宫格的微博卡片、底部液态玻璃导航栏" fetchpriority="high" decoding="async">
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">功能</p>
+        <h2>该有的都在，顺手的地方更顺</h2>
+        <p>从信息流到发布，19 个页面全部走通；下面这些是这一版最常用的部分。</p>
+      </div>
+
+      <div class="features">
+        <article class="card">
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></svg>
+            prism 设计语言
+          </h3>
+          <p>底栏是液态玻璃镜片，按下有 98.5% 的缩放回弹，进详情走跟手返回转场。整套来自 FlClash 的 prism_ui。</p>
+        </article>
+
+        <article class="card">
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><path d="M8 4v5"/></svg>
+            多栏目信息流
+          </h3>
+          <p>关注、推荐、好友圈、特别关注、悄悄关注、本地关注、收藏、附近与自建分组；左右滑动切栏目，双击底栏回到最新。</p>
+        </article>
+
+        <article class="card">
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.6 8.6 0 0 1-3.7-.8L4 21l1.8-4.6A8.5 8.5 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5Z"/></svg>
+            详情与评论
+          </h3>
+          <p>转发块、九宫格、投票、编辑记录；评论按热度或时间排序，楼中楼可以整页展开，评论配图同样能点开、长按保存。</p>
+        </article>
+
+        <article class="card">
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M9.5 8h5"/><circle cx="12" cy="15" r="2.2"/></svg>
+            个人页折叠头
+          </h3>
+          <p>封面铺满状态栏底下，头像压住封面底边；下滑时封面裁短、头像缩小挪进顶栏，名字从大标题变成顶栏标题。</p>
+        </article>
+
+        <article class="card">
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 20h4L20 8l-4-4L4 16v4Z"/><path d="m14 6 4 4"/></svg>
+            发布与草稿
+          </h3>
+          <p>最多 9 张图、可见范围、话题联想、上传进度；写一半可以直接丢进草稿箱，下次接着改。</p>
+        </article>
+
+        <article class="card">
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3 4 6.5V12c0 4.4 3.2 7.9 8 9 4.8-1.1 8-4.6 8-9V6.5L12 3Z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg>
+            登录态只在本机
+          </h3>
+          <p>Cookie 写进应用私有目录，不经过任何中转服务；不发遥测，卸载应用即清空。所有请求直接发往微博接口。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--tight" id="screens">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">截图</p>
+        <h2>在雷电模拟器（Android 14 · 1080×2400）上实拍</h2>
+        <p>横向滚动查看。图片按显示尺寸下采样过，滚动不会卡。</p>
+      </div>
+
+      <div class="shots" role="group" aria-label="应用截图">
+        <figure>
+          <img src="assets/shot-feed.webp" width="480" height="1067" alt="信息流：顶栏与微博卡片" loading="lazy" decoding="async">
+          <figcaption>信息流</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/shot-detail.webp" width="480" height="1067" alt="微博详情：正文、转发块与评论" loading="lazy" decoding="async">
+          <figcaption>详情</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/shot-comments.webp" width="480" height="1067" alt="评论区：楼中楼与点赞" loading="lazy" decoding="async">
+          <figcaption>评论</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/shot-discover.webp" width="480" height="1067" alt="发现页：搜索框与热搜榜" loading="lazy" decoding="async">
+          <figcaption>发现</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/shot-settings.webp" width="480" height="1067" alt="设置页：外观、浏览、互动与更新分组" loading="lazy" decoding="async">
+          <figcaption>设置</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="install">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">安装</p>
+        <h2>三步装到手机上</h2>
+        <p>包是 arm64 的，覆盖现在绝大多数安卓手机。装之前请先卸载旧版本或确认签名一致。</p>
+      </div>
+
+      <div class="install">
+        <ol class="steps">
+          <li>
+            <strong>下载 APK</strong>
+            <p>
+              在手机浏览器里打开
+              <a href="https://github.com/ashshay/hobo/releases/latest">Releases 页面</a>，
+              点 <code>hobo-1.05.0-arm64.apk</code>。
+            </p>
+          </li>
+          <li>
+            <strong>允许安装未知来源应用</strong>
+            <p>系统会拦一次，按提示给浏览器（或文件管理器）放开「安装未知应用」权限即可。</p>
+          </li>
+          <li>
+            <strong>装完打开，登录或访客模式</strong>
+            <p>登录走网页授权，也可以粘贴 Cookie；不想登录就选纯本地模式，信息流照样能看。</p>
+          </li>
+        </ol>
+
+        <aside class="panel">
+          <h3>这一版的包</h3>
+          <dl class="spec">
+            <dt>版本</dt><dd>1.05.0（versionCode 7）</dd>
+            <dt>ABI</dt><dd>arm64-v8a</dd>
+            <dt>大小</dt><dd>约 20 MB</dd>
+            <dt>minSdk</dt><dd>24（Android 7.0）</dd>
+            <dt>targetSdk</dt><dd>36</dd>
+            <dt>签名</dt><dd>debug keystore</dd>
+          </dl>
+          <p class="note">
+            签名用的是 SDK 默认的 debug key，自用足够；换签名后新包盖不上旧包，需要先卸载。
+          </p>
+          <h3>用 adb 装</h3>
+          <pre class="code"><code><span class="c"># 下载后</span>
+adb install -r hobo-1.05.0-arm64.apk</code></pre>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--tight" id="changelog">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">更新日志</p>
+        <h2>这一版改了什么</h2>
+        <p>完整的提交记录在 <a href="https://github.com/ashshay/hobo/commits/main">仓库的 commits 页</a>。</p>
+      </div>
+
+      <ol class="log">
+        <li>
+          <h3>1.05.0 <time>2026-11-21</time></h3>
+          <ul>
+            <li>设置 →「检查更新」现在直接打开 GitHub 页面，版本说明与安装包只在一处维护。</li>
+            <li>内置浏览器新增「用浏览器打开」按钮，遇到登录或支付这类只能在系统浏览器跑完的页面可以一键转出去。</li>
+            <li>首次把源码与安装包公开到 GitHub，附 GitHub Pages 站点。</li>
+          </ul>
+        </li>
+        <li>
+          <h3>1.03.0 <time>2026-11-20</time></h3>
+          <ul>
+            <li>个人页折叠头：封面、头像与标题随滚动收进顶栏。</li>
+            <li>顶栏改版：左侧发布，右侧历史 / 收藏 / 搜索 / 设置。</li>
+            <li>设置与底栏重整：微博页栏目多选、左右滑动切栏目、底栏显示头像、长按「我」切号。</li>
+            <li>浏览历史；底栏选中态不再被镜片着色裁切。</li>
+          </ul>
+        </li>
+        <li>
+          <h3>1.02.0 <time>2026-11-19</time></h3>
+          <ul>
+            <li>新图标包与应用图标形状切换（圆角矩形 / 圆形），走 activity-alias 而不是自适应图标。</li>
+          </ul>
+        </li>
+        <li>
+          <h3>1.01.0 <time>2026-11-19</time></h3>
+          <ul>
+            <li>下拉刷新、卡片上直接点赞 / 转发 / 进评论、点赞限流退避。</li>
+            <li>评论配图、多档视频清晰度、保存图片与视频到相册。</li>
+            <li>冷启动恢复上次浏览位置。</li>
+          </ul>
+        </li>
+        <li>
+          <h3>1.00.0 <time>2026-11-18</time></h3>
+          <ul>
+            <li>首个可用版本：信息流、详情、主页、搜索、消息、发布、看图、视频、设置与登录。</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p class="footer-line">
+      Hobo · GPL-3.0 · 界面基于 FlClash 的
+      <a href="https://github.com/chen08209/FlClash">prism_ui</a>
+    </p>
+    <nav aria-label="页脚导航">
+      <a href="https://github.com/ashshay/hobo">GitHub</a>
+      <a href="https://github.com/ashshay/hobo/releases">Releases</a>
+      <a href="https://github.com/ashshay/hobo/issues">反馈</a>
+      <a href="https://github.com/ashshay/hobo/blob/main/LICENSE">许可证</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

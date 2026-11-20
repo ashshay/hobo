@@ -1,0 +1,75 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- 保存图片 / 视频到相册：Android 10 起走 MediaStore 不需要权限，只有更老的系统要。 -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
+    <application
+        android:label="Hobo"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:usesCleartextTraffic="false">
+        <!-- 桌面入口不在这里：MAIN/LAUNCHER 挂在下面两个 activity-alias 上，
+             这样设置里才能换图标形状。显式 `am start -n com.hobo.app/.MainActivity`
+             仍然有效。 -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+        </activity>
+        <!-- 两套已经画好形状的启动图标，同一时刻只启用一个（MainActivity.kt 的 hobo/icon 通道）。
+             这里刻意不用 adaptive-icon：Android 8+ 的自适应图标由启动器套遮罩，应用改不了形状，
+             想做「圆角矩形 / 圆形」切换就只能把形状画进位图。 -->
+        <activity-alias
+            android:name=".IconRounded"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="true"
+            android:label="Hobo"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconCircle"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="Hobo"
+            android:icon="@mipmap/ic_launcher_round"
+            android:roundIcon="@mipmap/ic_launcher_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+        <!-- 部分模拟器/旧 GPU 的 Vulkan 驱动会让 Impeller 卡死（界面冻结、CPU 0%），
+             先用 Skia 渲染保证可用；真机验证通过后可删掉这行恢复 Impeller。 -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+    </application>
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+    </queries>
+</manifest>
