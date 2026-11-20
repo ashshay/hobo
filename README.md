@@ -6,15 +6,19 @@ Hobo 是 Cobo 的 **Flutter / Dart 重写版**：同一个微博客户端，界�
 
 - 应用名：**Hobo**
 - 包名：`com.hobo.app`
-- 版本：`1.05.0+6`（界面显示 `1.05`）
+- 版本：`1.05.0+7`（界面显示 `1.05`）
 - 依赖：Flutter 3.47.6（Dart 3.13），`prism_ui` 以本地 path 依赖引入
+- 仓库：<https://github.com/ashshay/hobo> · 站点：<https://ashshay.github.io/hobo/>
 
 ## 安装包
 
 | 包 | 路径 | 说明 |
 | --- | --- | --- |
-| release | `build/app/outputs/flutter-apk/app-release.apk` | 约 20 MB，`1.05.0 (6)`，**arm64 手机专用**（AOT，含最新改动） |
-| debug | `build/app/outputs/flutter-apk/app-debug.apk` | 约 232 MB，`1.05.0 (6)`，含三种 ABI，模拟器/调试用 |
+| release | `build/app/outputs/flutter-apk/app-release.apk` | 约 20 MB，`1.05.0 (7)`，**arm64 手机专用**（AOT，含最新改动） |
+| debug | `build/app/outputs/flutter-apk/app-debug.apk` | 约 232 MB，`1.05.0 (7)`，含三种 ABI，模拟器/调试用 |
+
+公开下载走 GitHub Releases：<https://github.com/ashshay/hobo/releases/latest>
+（资产名 `hobo-1.05.0-arm64.apk`）。
 
 ```powershell
 adb install -r build\app\outputs\flutter-apk\app-release.apk
@@ -60,7 +64,8 @@ lib/
 │   ├── super_topic.dart      超话身份校验、栏目、分页
 │   ├── emotions.dart         表情分组（接口 + 内置兜底）
 │   ├── composer_models.dart  可见范围、话题联想、@/# 触发词
-│   └── update.dart           GitHub Releases 检查（未配置仓库时安全返回）
+│   ├── system_browser.dart   把网址交给系统浏览器（原生 hobo/browser 通道）
+│   └── update.dart           版本号 + GitHub 入口（站点 / Releases / API 地址的唯一真源）
 └── ui/
     ├── shell.dart            底栏（微博/发现/消息/我）
     ├── routes.dart           所有页面入口 + 正文链接路由 + 卡片「更多」
@@ -73,12 +78,19 @@ lib/
 android/app/src/main/kotlin/com/hobo/app/MainActivity.kt
                              系统 CookieManager 的读写通道（登录 WebView 与 App 共用）
                              + hobo/media 相册保存通道 + hobo/icon 图标形状通道
+                             + hobo/browser 系统浏览器通道
 assets/icon/
 ├── hobo_icon.png            应用图标方图（关于页、设置页按设置裁形状）
 └── hobo_icon_512.png        商店用的 512 图
+docs/                        GitHub Pages 站点根目录（见下）
+├── index.html               落地页：功能 / 截图 / 安装 / 更新日志
+├── assets/site.css          站点样式
+├── assets/*.webp            站点截图（tool/make_site_images.py 生成）
+└── .nojekyll                跳过 Jekyll，原样发布
 tool/
 ├── smoke.dart                纯 Dart 冒烟：推荐流 / 详情 / 评论 / 热搜
-└── make_icons.py             从方图生成两套启动图标（圆角矩形 / 圆形）
+├── make_icons.py             从方图生成两套启动图标（圆角矩形 / 圆形）
+└── make_site_images.py       截图 → 站点用 WebP + 站点图标
 ```
 
 ## 已实现功能
@@ -92,11 +104,31 @@ tool/
 | 消息 | 会话列表（未读点）、聊天（文字/图片、长轮询、失败重试）、群聊 gid |
 | 发布 | 首页顶栏「发布」进入；最多 9 图、可见范围、草稿、上传进度提示 |
 | 看图 / 视频 | 点缩略图 Hero 放大动画、双指缩放、双击放大/复原、翻页、复制链接、保存图片到相册；**长按缩略图或图片出「查看原图 / 保存图片 / 复制链接」**；video_player + Referer/Cookie 头，多档清晰度切换（超清/高清/标清）、保存视频到相册，失败退回内置浏览器 |
-| 设置 | 深色模式/字号/强调色（可跟随壁纸）/**应用图标（圆角矩形 / 圆形）**/卡片跟随壁纸取色/模糊、**微博页栏目多选（保存后才出现在首页）**、本地关注账号、附近城市、热搜榜、看图画质、点赞确认、底栏「我」头像、长按「我」快捷切号、检查更新占位、**捐赠（赞赏码）**、缓存清理、退出 |
+| 设置 | 深色模式/字号/强调色（可跟随壁纸）/**应用图标（圆角矩形 / 圆形）**/卡片跟随壁纸取色/模糊、**微博页栏目多选（保存后才出现在首页）**、本地关注账号、附近城市、热搜榜、看图画质、点赞确认、底栏「我」头像、长按「我」快捷切号、**检查更新（直接打开 GitHub 页面）**、**捐赠（赞赏码）**、缓存清理、退出 |
 | 登录 | 全屏 WebView 登录（系统 CookieManager 读取）+ 粘贴 Cookie；纯本地访客模式 |
 | 主题 | prism 的 seed 配色；Android 12+ 用 Monet 从壁纸取强调色（直接取系统那一档，不再二次推导），卡片/页面色调也可选择跟随壁纸 |
 | 底栏 | 四格：微博 / 发现 / 消息 / 我（居中，全宽药丸）；首页顶栏左侧是发微博（实心加号），右侧是历史 / 收藏 / 搜索 / 设置（扳手）；下滑信息流时顶栏与底栏一起收起；双击「微博」刷新并回到最新；底栏「我」可显示头像，长按弹出切号；**液态玻璃固定为标准档；按下/滑动仍有透明玻璃镜片和镜片内折射，但不再把图标着色成纯色片** |
 | 其它 | 超话（资料头/栏目/分页）、附近城市、投票（投/取消/比例）、网页、收藏/历史/草稿/账号/关于；卡片时间在「1小时前」这类相对时间后面补一条准确发布时间；转发链里的「查看图片」直接进看图页 |
+
+## 网页与更新链路
+
+设置 →「检查更新」和关于页的「检查更新」都直接打开 GitHub Pages 站点
+（`Updater.homepage`，定义在 `lib/data/update.dart`）——版本说明、更新日志和安装包
+只在站点与 Releases 里维护一份，应用里不再复述。
+
+内置网页（`lib/ui/pages/web_page.dart`）顶栏有「用浏览器打开」：把当前地址交给
+系统浏览器，用来应付第三方登录、支付、要求装 App 的下载页这类只能在浏览器里跑完的流程。
+走原生 `hobo/browser` 通道（`MainActivity.openInBrowser` → `Intent.ACTION_VIEW`），
+没有引入 url_launcher；`AndroidManifest.xml` 的 `<queries>` 里补了 http/https 的 VIEW 声明，
+Android 11 起的包可见性限制下也能正常交给浏览器。设备上没有可用的浏览器时返回 false，
+界面提示「没有找到可用的浏览器」，不会崩。
+
+站点源码就在本仓库的 `docs/`（GitHub Pages 从 `main` 分支的 `/docs` 发布，
+`.nojekyll` 关掉 Jekyll）。改完截图后跑一次：
+
+```powershell
+python tool/make_site_images.py      # docs/screenshots/*.png → docs/assets/*.webp + 站点图标
+```
 
 ## 应用图标
 
@@ -138,8 +170,9 @@ tool/
   （gsid / account-getoauth 静默续期）没有移植，会话续命靠响应里的 `Set-Cookie` 与冷启动心跳。
 - **视频**：用 `video_player`（支持 `httpHeaders`）替代 media_kit，省掉 libmpv 原生依赖。
 - **图片**：用 Flutter 自带 `Image.network` + 微博域名 Cookie 头，没有引入 Coil 式的磁盘缓存。
-- **长按底栏「我」切号**：暂未实现，账号切换在「设置 → 账号」里。
-- **更新**：`Updater.releasesUrl` 目前留空，检查更新会直接返回「已是最新版本」。
+- **长按底栏「我」切号**：账号切换在「设置 → 账号」与长按底栏「我」两处都能进。
+- **更新**：不做应用内下载，检查更新直接把人送到 GitHub Pages / Releases；
+  `Updater.latest()`（读 REST 接口挑最新一版）留着，以后要做边下边装时再接。
 
 ## 验证
 

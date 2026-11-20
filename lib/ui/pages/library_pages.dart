@@ -455,13 +455,11 @@ class AboutPage extends StatelessWidget {
               ),
               HoboRow(
                 title: '检查更新',
-                subtitle: '见设置页',
-                leading: const GlyphIcon(HoboGlyphs.download, size: 20),
-                onPressed: () async {
-                  final current = await Updater.currentVersion();
-                  if (!context.mounted) return;
-                  showHoboToast(context, '当前版本 $current');
-                },
+                subtitle: '在 GitHub 查看版本说明与安装包',
+                leading: const GlyphIcon(HoboGlyphs.openExternal, size: 20),
+                showChevron: true,
+                onPressed: () =>
+                    openWeb(context, Updater.homepage, title: 'Hobo 更新'),
               ),
               HoboRow(
                 title: '隐私说明',

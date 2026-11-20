@@ -206,6 +206,13 @@ abstract final class HoboGlyphs {
     ),
   ]);
 
+  /// 「到外部去」：Material 的 open_in_new。内置网页的工具栏用它表示「用浏览器打开」。
+  static const openExternal = Glyph([
+    GlyphPath(
+      'M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z',
+    ),
+  ]);
+
   static const camera = Glyph([
     GlyphPath(
       'M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM9 2L7.17 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z',

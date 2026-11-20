@@ -188,10 +188,10 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               HoboRow(
                 title: '检查更新',
-                subtitle: _checkingUpdate ? '正在检查…' : '当前版本 $_version',
+                subtitle: '当前版本 $_version · 打开 GitHub 页面',
                 leading: const GlyphIcon(HoboGlyphs.download, size: 20),
                 showChevron: true,
-                onPressed: _checkingUpdate ? null : _checkUpdate,
+                onPressed: _checkUpdate,
               ),
             ],
           ),
@@ -454,23 +454,16 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _checkUpdate() async {
+    if (_checkingUpdate) return;
     setState(() => _checkingUpdate = true);
     try {
-      final current = await Updater.currentVersion();
-      final info = await Updater.latest(current, includePrerelease: true);
-      if (!mounted) return;
-      if (info == null) {
-        showHoboToast(context, '已是最新版本 $_version');
-      } else {
-        showHoboToast(context, '发现新版本 ${info.version}');
-      }
+      // 记一笔「什么时候查过」，数据页/诊断用得到。
       context.read<Settings>().applyUpdateCheckedAt(
         DateTime.now().millisecondsSinceEpoch,
       );
-    } on Object catch (e) {
-      if (mounted) {
-        showHoboToast(context, '检查更新失败：$e', level: BannerLevel.error);
-      }
+      // 版本说明、更新日志和安装包都在 GitHub 页面上，直接把人送过去，
+      // 不在设置里复述一遍版本号。内置网页顶栏还能一键转到系统浏览器。
+      openWeb(context, Updater.homepage, title: 'Hobo 更新');
     } finally {
       if (mounted) setState(() => _checkingUpdate = false);
     }

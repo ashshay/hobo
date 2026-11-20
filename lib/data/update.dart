@@ -39,14 +39,29 @@ class UpdateInfo {
 }
 
 abstract final class Updater {
-  /// Hobo 还没有公开的发布仓库：留空时更新检查不联网，只报告当前版本。
-  static const releasesUrl = '';
+  /// GitHub 账号与仓库名；所有对外地址都由这两段拼出来。
+  static const owner = 'ashshay';
+  static const repository = 'hobo';
 
-  /// 界面上显示的版本号，跟 `pubspec.yaml` 的 `version: 1.05.0+6` 对齐。
+  /// 仓库主页，`https://github.com/ashshay/hobo`。
+  static const repoUrl = 'https://github.com/$owner/$repository';
+
+  /// GitHub Pages 站点，`https://ashshay.github.io/hobo/`。
+  /// 「检查更新」跳到这一页，页头就有「下载最新版」。
+  static const homepage = 'https://$owner.github.io/$repository/';
+
+  /// Releases 列表，`https://github.com/ashshay/hobo/releases`。
+  static const releasesPage = '$repoUrl/releases';
+
+  /// GitHub REST 接口，只给 [latest] 用。
+  static const releasesUrl =
+      'https://api.github.com/repos/$owner/$repository/releases';
+
+  /// 界面上显示的版本号，跟 `pubspec.yaml` 的 `version: 1.05.0+7` 对齐。
   static const displayVersion = '1.05';
 
   /// 跟 pubspec 的 `+N` 对齐。同一个版本号会反复出包，靠它区分是哪一次构建。
-  static const buildNumber = '6';
+  static const buildNumber = '7';
 
   /// `1.01（build 3）`
   static const versionLabel = '$displayVersion（build $buildNumber）';

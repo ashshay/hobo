@@ -7,10 +7,14 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../data/cookie_vault.dart';
 import '../../data/repo.dart';
+import '../../data/system_browser.dart';
 import '../widgets/common.dart';
 import '../widgets/glyphs.dart';
 
 /// 应用内网页：站内链接不进系统浏览器，并把本机登录态补进 WebView。
+///
+/// 顶栏右侧的「用浏览器打开」把当前地址交给系统浏览器，用来应付那些
+/// 只能在浏览器里跑完的流程（第三方登录、支付、要求装 App 的下载页）。
 class WebPage extends StatefulWidget {
   const WebPage({super.key, required this.url, this.title = '网页'});
 
@@ -25,6 +29,10 @@ class _WebPageState extends State<WebPage> {
   WebViewController? _controller;
   int _progress = 0;
   String _title = '';
+
+  /// 用户点到的那个地址。内置网页会自己跳转，复制链接和「用浏览器打开」都得用它，
+  /// 不能用 widget.url —— 那是入口，不是当前页。
+  late String _currentUrl = widget.url;
   String? _error;
 
   @override
@@ -49,9 +57,19 @@ class _WebPageState extends State<WebPage> {
           onProgress: (progress) {
             if (mounted) setState(() => _progress = progress);
           },
+          onUrlChange: (change) {
+            final url = change.url;
+            if (url == null || url.isEmpty || !mounted) return;
+            setState(() => _currentUrl = url);
+          },
           onPageFinished: (url) async {
             final title = await controller.getTitle() ?? '';
-            if (mounted) setState(() => _title = title);
+            if (mounted) {
+              setState(() {
+                _title = title;
+                if (url.isNotEmpty) _currentUrl = url;
+              });
+            }
           },
           onWebResourceError: (error) {
             if (mounted) setState(() => _error = error.description);
@@ -66,6 +84,19 @@ class _WebPageState extends State<WebPage> {
     }
   }
 
+  Future<void> _openInBrowser() async {
+    final opened = await SystemBrowser.open(_currentUrl);
+    if (!mounted) return;
+    if (!opened) {
+      showHoboToast(context, '没有找到可用的浏览器', level: BannerLevel.error);
+    }
+  }
+
+  Future<void> _copyLink() async {
+    await Clipboard.setData(ClipboardData(text: _currentUrl));
+    if (mounted) showHoboToast(context, '链接已复制');
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
@@ -74,12 +105,14 @@ class _WebPageState extends State<WebPage> {
       leading: const HoboBackButton(),
       actions: [
         IconButton(
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: widget.url));
-            if (context.mounted) showHoboToast(context, '链接已复制');
-          },
+          onPressed: _copyLink,
           tooltip: '复制链接',
           icon: const GlyphIcon(HoboGlyphs.link, size: 20),
+        ),
+        IconButton(
+          onPressed: controller == null ? null : _openInBrowser,
+          tooltip: '用浏览器打开',
+          icon: const GlyphIcon(HoboGlyphs.openExternal, size: 20),
         ),
         IconButton(
           onPressed: () => controller?.reload(),

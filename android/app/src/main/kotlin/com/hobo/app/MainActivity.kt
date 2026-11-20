@@ -1,9 +1,12 @@
 package com.hobo.app
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.ContentValues
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -18,15 +21,18 @@ import java.io.File
  * 登录完成后把整表读出来落盘，之后每次新建 WebView 再把本地那份补回去。
  * 对应 Kotlin 版 CookieVault.readDomains / inject / plant。
  *
- * 另外挂两条通道：
+ * 另外挂三条通道：
  *  - `hobo/media`：把图片 / 视频写进系统相册（MediaStore），Android 10 起不需要权限；
  *  - `hobo/icon`：切换桌面图标形状。两套图标是已经画好形状的位图，分别挂在
- *    `.IconRounded` / `.IconCircle` 两个 activity-alias 上，这里只负责开关它们。
+ *    `.IconRounded` / `.IconCircle` 两个 activity-alias 上，这里只负责开关它们；
+ *  - `hobo/browser`：把网址交给系统浏览器（`Intent.ACTION_VIEW`），给内置网页的
+ *    「用浏览器打开」按钮用。
  */
 class MainActivity : FlutterActivity() {
     private val channelName = "hobo/cookies"
     private val mediaChannelName = "hobo/media"
     private val iconChannelName = "hobo/icon"
+    private val browserChannelName = "hobo/browser"
     private val storageRequestCode = 0x4d44
 
     /** 形状 → activity-alias 后缀；`.IconRounded` 是 AndroidManifest 里的默认入口。 */
@@ -109,6 +115,47 @@ class MainActivity : FlutterActivity() {
                     result.error("icon_failed", t.message, null)
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, browserChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "openUrl" -> {
+                        val url = call.argument<String>("url").orEmpty()
+                        result.success(openInBrowser(url))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    /**
+     * 交给系统浏览器。
+     *
+     * 只填 action + data，不 setPackage：默认浏览器可以是任何一个第三方浏览器，
+     * 写死包名反而会在没装那个 App 的机器上失败。系统没有能处理 http/https 的应用时
+     * `startActivity` 会抛 `ActivityNotFoundException`，这里当成「打不开」返回 false，
+     * 由界面提示，而不是让 App 崩掉。
+     */
+    private fun openInBrowser(url: String): Boolean {
+        if (url.isBlank()) return false
+        val uri = try {
+            Uri.parse(url)
+        } catch (e: Exception) {
+            return false
+        }
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return false
+        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
+            // 从 Activity 起 Intent 本来不需要 NEW_TASK，但部分 ROM 的 chooser 会把
+            // 目标放进新任务；显式加上更稳，也不会把当前 WebView 任务带过去。
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try {
+            startActivity(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
     }
 
     /**
