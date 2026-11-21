@@ -380,6 +380,55 @@ void main() {
       expect(pics[0].large, contains('/large/abc.jpg'));
       expect(pics[1].large, 'https://wx1.sinaimg.cn/large/def.jpg');
     });
+
+    // 真实样本：同一条微博的 pics 里，同一张图以 mw2000 与 large 两种尺寸、
+    // 不同 CDN 域名各给一次。按完整 URL 去重会漏掉，界面上就重复成两张。
+    test('同一张图的不同尺寸 / 域名只留一张', () {
+      final pics = picsOf(json('''
+      {
+        "pics": [
+          {"url": "https://wx1.sinaimg.cn/mw2000/007s4g7Vgy1i0ovqpf1t2j32yo1o01kz.jpg",
+           "large": {"url": "https://wx1.sinaimg.cn/mw2000/007s4g7Vgy1i0ovqpf1t2j32yo1o01kz.jpg"}},
+          {"url": "https://wx1.sinaimg.cn/mw2000/007s4g7Vgy1i0ovqpyn77j31kw0sgwit.jpg",
+           "large": {"url": "https://wx1.sinaimg.cn/mw2000/007s4g7Vgy1i0ovqpyn77j31kw0sgwit.jpg"}},
+          {"url": "https://wx1.sinaimg.cn/large/007s4g7Vgy1i0ovqpf1t2j32yo1o01kz.jpg",
+           "large": {"url": "https://wx1.sinaimg.cn/large/007s4g7Vgy1i0ovqpf1t2j32yo1o01kz.jpg"}},
+          {"url": "https://wx1.sinaimg.cn/large/007s4g7Vgy1i0ovqpyn77j31kw0sgwit.jpg",
+           "large": {"url": "https://wx1.sinaimg.cn/large/007s4g7Vgy1i0ovqpyn77j31kw0sgwit.jpg"}}
+        ]
+      }
+      '''));
+      expect(pics.length, 2, reason: '4 条里只有 2 张不同的图');
+      expect(pics[0].large, contains('i0ovqpf1t2j'));
+      expect(pics[1].large, contains('i0ovqpyn77j'));
+    });
+
+    test('不同 CDN 域名指向同一张图时只留一张', () {
+      final pics = picsOf(json('''
+      {
+        "pics": [
+          {"url": "https://wx3.sinaimg.cn/mw2000/0077i8SZly1ij8varrw42j30u0140q8v.jpg",
+           "large": {"url": "https://wx3.sinaimg.cn/mw2000/0077i8SZly1ij8varrw42j30u0140q8v.jpg"}},
+          {"url": "https://wx1.sinaimg.cn/large/0077i8SZly1ij8varrw42j30u0140q8v.jpg",
+           "large": {"url": "https://wx1.sinaimg.cn/large/0077i8SZly1ij8varrw42j30u0140q8v.jpg"}}
+        ]
+      }
+      '''));
+      expect(pics.length, 1);
+    });
+
+    test('真正不同的图不会被误合并', () {
+      final pics = picsOf(json('''
+      {
+        "pics": [
+          {"url": "https://wx1.sinaimg.cn/large/aaa.jpg", "large": {"url": "https://wx1.sinaimg.cn/large/aaa.jpg"}},
+          {"url": "https://wx1.sinaimg.cn/large/bbb.jpg", "large": {"url": "https://wx1.sinaimg.cn/large/bbb.jpg"}},
+          {"url": "https://wx1.sinaimg.cn/large/ccc.jpg", "large": {"url": "https://wx1.sinaimg.cn/large/ccc.jpg"}}
+        ]
+      }
+      '''));
+      expect(pics.length, 3);
+    });
   });
 }
 

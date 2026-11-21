@@ -215,14 +215,16 @@ String livePlayUrl(String raw) {
 /// 2. `pic` —— 单张图评论（`m.weibo.cn/comments/hotflow` 的图片评论就是这个结构）；
 /// 3. `pic_ids` + `pic_infos` —— weibo.com 那套，`pic_infos` 缺项时按 id 拼地址兜底。
 ///
-/// 最后按 `large` 去重：同一条评论可能同时给出 `pic` 与 `pics`，别渲染成两张。
+/// 去重按**图片文件名**而不是完整 URL：同一张图会以不同尺寸目录
+/// （`mw2000` / `large` / `orj360`）和不同 CDN 域名（`wx1` / `wx2` / `wx3` / `ss1`）
+/// 各给一次，按 URL 比会把同一张图当成两张，界面上就重复了。
 List<Pic> picsOf(Map<String, dynamic> o) {
   final out = <Pic>[];
   final seen = <String>{};
 
   void add(Pic? pic) {
     if (pic == null) return;
-    final key = pic.large.isNotEmpty ? pic.large : pic.thumb;
+    final key = _picKey(pic.large.isNotEmpty ? pic.large : pic.thumb);
     if (key.isEmpty || !seen.add(key)) return;
     out.add(pic);
   }
@@ -258,6 +260,14 @@ List<Pic> picsOf(Map<String, dynamic> o) {
     }
   }
   return out;
+}
+
+/// 去重用的键：图片文件名（`0092j2IYgy1ij7ljfblb3j30j60tr7e4.jpg`）。
+/// 域名与尺寸目录都不参与比较 —— 它们只是同一张图的不同取法。
+String _picKey(String url) {
+  if (url.isEmpty) return '';
+  final path = Uri.tryParse(url)?.path ?? url;
+  return path.split('/').last;
 }
 
 /// 视频 / 实况占位：`url` 里没有真实文件名，只有 `&690` 这类占位串，请求必 404。
