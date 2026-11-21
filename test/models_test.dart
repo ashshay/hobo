@@ -273,6 +273,114 @@ void main() {
       expect(CookieVault.header(table, 'm.weibo.cn'), isNot(contains('SUB=')));
     });
   });
+
+  group('评论配图', () {
+    // 真实样本：m.weibo.cn/comments/hotflow 的图片评论。
+    // 关键点是 `pics` 里只有一条视频占位（url 是 `&690`，请求 404），
+    // 真正的图在 `pic` 里。以前优先读 `pics` 就永远拿到那个 404 地址。
+    const imageComment = '''
+    {
+      "id": "5367005964402716",
+      "text": "原曲原唱还蛮好听的",
+      "pic": {
+        "pid": "0092j2IYgy1ij7ljfblb3j30j60tr7e4",
+        "url": "https://wx1.sinaimg.cn/orj360/0092j2IYgy1ij7ljfblb3j30j60tr7e4.jpg",
+        "size": "orj360",
+        "geo": {"width": 360, "height": 558, "croped": false},
+        "large": {
+          "size": "large",
+          "url": "https://wx1.sinaimg.cn/large/0092j2IYgy1ij7ljfblb3j30j60tr7e4.jpg",
+          "geo": {"width": "690", "height": "1071", "croped": false}
+        }
+      },
+      "pics": [{
+        "pid": null,
+        "url": "https://ss1.sinaimg.cn/orj360/&690",
+        "size": "orj360",
+        "geo": false,
+        "large": {"size": "large", "url": "https://ss1.sinaimg.cn/large/&690", "geo": false},
+        "duration": 0,
+        "type": "video"
+      }]
+    }
+    ''';
+
+    test('图片评论走 pic 字段，跳过 pics 里的视频占位', () {
+      final comment = Comment.from(json(imageComment));
+      expect(comment, isNotNull);
+      expect(comment!.pics.length, 1);
+      final pic = comment.pics.first;
+      expect(pic.thumb, contains('0092j2IYgy1ij7ljfblb3j30j60tr7e4'));
+      expect(pic.large, contains('/large/'));
+      expect(pic.thumb, isNot(contains('&690')));
+      expect(pic.large, isNot(contains('&690')));
+      // 尺寸取 large.geo（字符串数字也要能读）。
+      expect(pic.width, 690);
+      expect(pic.height, 1071);
+    });
+
+    test('只有视频占位时不产出图片', () {
+      final comment = Comment.from(json('''
+      {
+        "id": "1",
+        "text": "纯视频评论",
+        "pics": [{
+          "pid": null,
+          "url": "https://ss1.sinaimg.cn/orj360/&690",
+          "large": {"url": "https://ss1.sinaimg.cn/large/&690"},
+          "type": "video"
+        }]
+      }
+      '''));
+      expect(comment!.pics, isEmpty);
+    });
+
+    test('pic 与 pics 指向同一张图时只留一张', () {
+      final comment = Comment.from(json('''
+      {
+        "id": "2",
+        "text": "重复",
+        "pic": {
+          "url": "https://wx1.sinaimg.cn/orj360/abc.jpg",
+          "large": {"url": "https://wx1.sinaimg.cn/large/abc.jpg"}
+        },
+        "pics": [{
+          "url": "https://wx1.sinaimg.cn/orj360/abc.jpg",
+          "large": {"url": "https://wx1.sinaimg.cn/large/abc.jpg"}
+        }]
+      }
+      '''));
+      expect(comment!.pics.length, 1);
+    });
+
+    test('正文的 pics 数组照常解析', () {
+      final pics = picsOf(json('''
+      {
+        "pics": [
+          {"url": "https://wx1.sinaimg.cn/orj360/a.jpg", "large": {"url": "https://wx1.sinaimg.cn/large/a.jpg"}},
+          {"url": "https://wx1.sinaimg.cn/orj360/b.jpg", "large": {"url": "https://wx1.sinaimg.cn/large/b.jpg"}}
+        ]
+      }
+      '''));
+      expect(pics.length, 2);
+      expect(pics[0].large, contains('/large/a.jpg'));
+      expect(pics[1].large, contains('/large/b.jpg'));
+    });
+
+    test('pic_ids + pic_infos 缺项时按 id 拼地址', () {
+      final pics = picsOf(json('''
+      {
+        "pic_ids": ["abc", "def"],
+        "pic_infos": {
+          "abc": {"url": "https://wx1.sinaimg.cn/orj360/abc.jpg", "large": {"url": "https://wx1.sinaimg.cn/large/abc.jpg"}}
+        }
+      }
+      '''));
+      expect(pics.length, 2);
+      expect(pics[0].large, contains('/large/abc.jpg'));
+      expect(pics[1].large, 'https://wx1.sinaimg.cn/large/def.jpg');
+    });
+  });
 }
 
 String _weekday(DateTime date) => const [

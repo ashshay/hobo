@@ -205,37 +205,74 @@ String livePlayUrl(String raw) {
   return 'https://video.weibo.com/media/play?livephoto=${Uri.encodeComponent(absolute)}';
 }
 
-/// 一条微博的配图：优先 `pics[]`，没有时退回 `pic_ids` + `pic_infos`。
+/// 一条微博 / 一条评论的配图。
+///
+/// 微博在不同接口里给图的字段不一样，按可信度依次尝试：
+///
+/// 1. `pics[]` —— 正文与部分评论用的数组。**注意**：评论里的 `pics` 有时只放一条
+///    视频占位（`url` 是 `https://ss1.sinaimg.cn/orj360/&690`，请求 404），
+///    真正的图在 `pic` 里，所以这里要跳过占位项，不能见到 `pics` 就返回；
+/// 2. `pic` —— 单张图评论（`m.weibo.cn/comments/hotflow` 的图片评论就是这个结构）；
+/// 3. `pic_ids` + `pic_infos` —— weibo.com 那套，`pic_infos` 缺项时按 id 拼地址兜底。
+///
+/// 最后按 `large` 去重：同一条评论可能同时给出 `pic` 与 `pics`，别渲染成两张。
 List<Pic> picsOf(Map<String, dynamic> o) {
-  final arr = o.arr('pics');
-  if (arr != null && arr.isNotEmpty) {
-    final out = <Pic>[];
-    for (final item in arr) {
-      final pic = _picOf(jObj(item));
-      if (pic != null) out.add(pic);
-    }
-    return out;
-  }
-  final ids = o.arr('pic_ids');
-  if (ids == null) return const [];
-  final infos = o.obj('pic_infos');
   final out = <Pic>[];
-  for (final item in ids) {
-    final id = jStr(item);
-    if (id.isEmpty) continue;
-    final parsed = _picOf(infos?.obj(id));
-    if (parsed != null) {
-      out.add(parsed);
-    } else {
-      out.add(
-        Pic(
-          thumb: 'https://wx1.sinaimg.cn/orj360/$id.jpg',
-          large: 'https://wx1.sinaimg.cn/large/$id.jpg',
-        ),
-      );
+  final seen = <String>{};
+
+  void add(Pic? pic) {
+    if (pic == null) return;
+    final key = pic.large.isNotEmpty ? pic.large : pic.thumb;
+    if (key.isEmpty || !seen.add(key)) return;
+    out.add(pic);
+  }
+
+  final arr = o.arr('pics');
+  if (arr != null) {
+    for (final item in arr) {
+      final map = jObj(item);
+      if (map == null || _isPlaceholderPic(map)) continue;
+      add(_picOf(map));
+    }
+  }
+
+  add(_picOf(o.obj('pic')));
+
+  final ids = o.arr('pic_ids');
+  if (ids != null) {
+    final infos = o.obj('pic_infos');
+    for (final item in ids) {
+      final id = jStr(item);
+      if (id.isEmpty) continue;
+      final parsed = _picOf(infos?.obj(id));
+      if (parsed != null) {
+        add(parsed);
+      } else {
+        add(
+          Pic(
+            thumb: 'https://wx1.sinaimg.cn/orj360/$id.jpg',
+            large: 'https://wx1.sinaimg.cn/large/$id.jpg',
+          ),
+        );
+      }
     }
   }
   return out;
+}
+
+/// 视频 / 实况占位：`url` 里没有真实文件名，只有 `&690` 这类占位串，请求必 404。
+/// 这类条目交给视频播放器，不该进图片网格。
+bool _isPlaceholderPic(Map<String, dynamic> p) {
+  final url = firstNonEmpty([
+    p.str('url'),
+    p.obj('large')?.str('url') ?? '',
+  ]);
+  if (url.isEmpty) return true;
+  final path = Uri.tryParse(url)?.path ?? url;
+  final name = path.split('/').last;
+  // 正常图片名形如 `0092j2IYgy1ij7ljfblb3j30j60tr7e4.jpg`；
+  // 占位项是 `&690`，没有扩展名也没有 id。
+  return !name.contains('.') || name.startsWith('&');
 }
 
 Pic? _picOf(Map<String, dynamic>? p) {
