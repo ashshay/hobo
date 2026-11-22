@@ -50,7 +50,7 @@
       <div>
         <p class="badge">
           <span class="dot" aria-hidden="true"></span>
-          最新版本 <strong>1.05.0</strong> · build 7
+          最新版本 <strong>1.06.0</strong> · build 8
         </p>
         <h1>微博客户端，<br><span>换个做法</span>。</h1>
         <p class="hero-lead">
@@ -202,7 +202,7 @@
             <p>
               在手机浏览器里打开
               <a href="https://github.com/ashshay/hobo/releases/latest">Releases 页面</a>，
-              点 <code>hobo-1.05.0-arm64.apk</code>。
+              点 <code>hobo-1.06.0-arm64.apk</code>。
             </p>
           </li>
           <li>
@@ -218,7 +218,7 @@
         <aside class="panel">
           <h3>这一版的包</h3>
           <dl class="spec">
-            <dt>版本</dt><dd>1.05.0（versionCode 7）</dd>
+            <dt>版本</dt><dd>1.06.0（versionCode 8）</dd>
             <dt>ABI</dt><dd>arm64-v8a</dd>
             <dt>大小</dt><dd>约 20 MB</dd>
             <dt>minSdk</dt><dd>24（Android 7.0）</dd>
@@ -230,7 +230,7 @@
           </p>
           <h3>用 adb 装</h3>
           <pre class="code"><code><span class="c"># 下载后</span>
-adb install -r hobo-1.05.0-arm64.apk</code></pre>
+adb install -r hobo-1.06.0-arm64.apk</code></pre>
         </aside>
       </div>
     </div>
@@ -245,6 +245,16 @@ adb install -r hobo-1.05.0-arm64.apk</code></pre>
       </div>
 
       <ol class="log">
+        <li>
+          <h3>1.06.0 <time>2026-11-22</time></h3>
+          <ul>
+            <li>消息页补上通知：<strong>@我的微博 / @我的评论 / 收到的评论 / 收到的赞</strong>四类，顶上胶囊切页，左右滑动也能翻。</li>
+            <li>「@我的微博」直接复用信息流卡片，点赞、转发、进详情、九宫格、视频都能用；评论与赞是新的通知卡片，会带出被评论 / 被赞的那条微博摘要。</li>
+            <li>私信会话列表保留在「私信」页签，四个栏目都支持下拉刷新与续页加载。</li>
+            <li>修复切页动画会让四栏列表状态全部重建（滚动位置回到顶部、请求回来时控制器已被销毁）。</li>
+            <li>修复列表在布局期间续页触发的「帧内调度重建」告警。</li>
+          </ul>
+        </li>
         <li>
           <h3>1.05.0 <time>2026-11-21</time></h3>
           <ul>

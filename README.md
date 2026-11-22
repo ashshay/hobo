@@ -6,7 +6,7 @@ Hobo 是 Cobo 的 **Flutter / Dart 重写版**：同一个微博客户端，界�
 
 - 应用名：**Hobo**
 - 包名：`com.hobo.app`
-- 版本：`1.05.0+7`（界面显示 `1.05`）
+- 版本：`1.06.0+8`（界面显示 `1.06`）
 - 依赖：Flutter 3.47.6（Dart 3.13），`prism_ui` 以本地 path 依赖引入
 - 仓库：<https://github.com/ashshay/hobo> · 站点：<https://ashshay.github.io/hobo/>
 
@@ -14,11 +14,11 @@ Hobo 是 Cobo 的 **Flutter / Dart 重写版**：同一个微博客户端，界�
 
 | 包 | 路径 | 说明 |
 | --- | --- | --- |
-| release | `build/app/outputs/flutter-apk/app-release.apk` | 约 20 MB，`1.05.0 (7)`，**arm64 手机专用**（AOT，含最新改动） |
-| debug | `build/app/outputs/flutter-apk/app-debug.apk` | 约 232 MB，`1.05.0 (7)`，含三种 ABI，模拟器/调试用 |
+| release | `build/app/outputs/flutter-apk/app-release.apk` | 约 20 MB，`1.06.0 (8)`，**arm64 手机专用**（AOT，含最新改动） |
+| debug | `build/app/outputs/flutter-apk/app-debug.apk` | 约 232 MB，`1.06.0 (8)`，含三种 ABI，模拟器/调试用 |
 
 公开下载走 GitHub Releases：<https://github.com/ashshay/hobo/releases/latest>
-（资产名 `hobo-1.05.0-arm64.apk`）。
+（资产名 `hobo-1.06.0-arm64.apk`）。
 
 ```powershell
 adb install -r build\app\outputs\flutter-apk\app-release.apk
@@ -81,7 +81,7 @@ lib/
 │   ├── api.dart              dio + UA/Referer/XSRF + Set-Cookie 回收 + GET 缓存
 │   ├── cookie_vault.dart     域名 → cookie 表；原生 CookieManager 通道（hobo/cookies）
 │   ├── models.dart           Status / Comment / User / Chat / Vote / 热搜解析（容错）
-│   ├── repo.dart             时间线、详情、评论双排序、互动、发布、私信、用户、搜索、超话
+│   ├── repo.dart             时间线、详情、评论双排序、互动、发布、私信、通知、用户、搜索、超话
 │   ├── store.dart            会话 / 账号 / 草稿 / 历史 / 收藏 / 关注标记 / 已读位置
 │   ├── settings.dart         SharedPreferences 设置项 + ChangeNotifier
 │   ├── media_saver.dart      图片 / 视频下载并写进系统相册（原生 hobo/media 通道）
@@ -127,7 +127,7 @@ tool/
 | 详情 | 正文、转发块（整块可点，进原微博）、九宫格、视频、投票入口、编辑记录；下拉刷新正文与评论；**评论配图**（九宫格，可点开、可长按保存）；评论按官方排版（头像/昵称/时间来源/正文/楼中楼/右上角点赞）、按热度与按时间切换、楼中楼整页展开 |
 | 主页 | **封面 + 头像随滚动折叠进顶栏**（见下）、资料卡、认证/会员标、关注/取关、关注/粉丝列表、特别/悄悄/本地标记 |
 | 搜索 | 联想词（XSRF）、搜索历史、五类热搜榜、综合/用户/话题三分类、话题多频道 |
-| 消息 | 会话列表（未读点）、聊天（文字/图片、长轮询、失败重试）、群聊 gid |
+| 消息 | **顶栏四格胶囊：@我 / 评论 / 赞 / 私信，左右滑动也能翻**；@我 再分「微博 / 评论」两格小胶囊，微博那栏直接复用信息流卡片；评论与赞是通知卡片（谁 + 做了什么 + 被评论/被赞微博摘要），点进详情；私信会话列表（未读点）、聊天（文字/图片、长轮询、失败重试）、群聊 gid；四个栏目都支持下拉刷新与续页 |
 | 发布 | 首页顶栏「发布」进入；最多 9 图、可见范围、草稿、上传进度提示 |
 | 看图 / 视频 | 点缩略图 Hero 放大动画、双指缩放、双击放大/复原、翻页、复制链接、保存图片到相册；**长按缩略图或图片出「查看原图 / 保存图片 / 复制链接」**；video_player + Referer/Cookie 头，多档清晰度切换（超清/高清/标清）、保存视频到相册，失败退回内置浏览器 |
 | 设置 | 深色模式/字号/强调色（可跟随壁纸）/**应用图标（圆角矩形 / 圆形）**/卡片跟随壁纸取色/模糊、**微博页栏目多选（保存后才出现在首页）**、本地关注账号、附近城市、热搜榜、看图画质、点赞确认、底栏「我」头像、长按「我」快捷切号、**检查更新（直接打开 GitHub 页面）**、**捐赠（赞赏码）**、缓存清理、退出 |
@@ -219,7 +219,7 @@ dart run tool/smoke.dart           # 真接口冒烟（可选：HOBO_COOKIE=…�
 | 详情 | 正文 + 转发块 + 九宫格、热门/按时间评论、楼中楼预览、点赞/收藏/转发/评论入口 |
 | 主页 | 封面、认证与会员标、关注数、微博流、设置入口 |
 | 发现 | 搜索框、五类热搜榜、搜索历史、热门榜切换 |
-| 消息 | 会话列表、未读点、时间 |
+| 消息 | 四格胶囊拉到 @我的微博 / 收到的评论（滚到底显「没有更多了」）/ 收到的赞 / 私信；左右滑动切栏，切回时列表状态还在 |
 | 设置 | 账号卡、外观/浏览/互动/更新/数据/关于分组、深色模式切换、强调色、字号 |
 | 看图 / 视频 | 双指缩放翻页；video_player 带 Referer/Cookie 播放成功 |
 | 暗色主题 | 整套配色、底栏与卡片均正确切换 |
