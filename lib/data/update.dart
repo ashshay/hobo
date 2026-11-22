@@ -57,11 +57,11 @@ abstract final class Updater {
   static const releasesUrl =
       'https://api.github.com/repos/$owner/$repository/releases';
 
-  /// 界面上显示的版本号，跟 `pubspec.yaml` 的 `version: 1.05.0+7` 对齐。
-  static const displayVersion = '1.05';
+  /// 界面上显示的版本号，跟 `pubspec.yaml` 的 `version: 1.06.0+8` 对齐。
+  static const displayVersion = '1.06';
 
   /// 跟 pubspec 的 `+N` 对齐。同一个版本号会反复出包，靠它区分是哪一次构建。
-  static const buildNumber = '7';
+  static const buildNumber = '8';
 
   /// `1.01（build 3）`
   static const versionLabel = '$displayVersion（build $buildNumber）';

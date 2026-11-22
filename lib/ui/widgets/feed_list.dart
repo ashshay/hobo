@@ -10,17 +10,24 @@ import 'image_actions.dart';
 import 'refresh.dart';
 import 'status_card.dart';
 
-/// 一条可以一直往下翻的微博流。分页游标就是接口回的那个 `since_id` / `max_id`。
+/// 一条可以一直往下翻的微博流。分页游标就是接口回的那个 `since_id` / `max_id`；
+/// 消息中心这类接口回的是页码，用 [FeedController.paged] 建。
 class FeedController extends ChangeNotifier {
-  FeedController(this._loader, {this.pageSize = 20});
+  FeedController(this._loader, {this.pageSize = 20}) : _paged = null;
 
-  final Future<FeedPage> Function(String? cursor, {required bool force})
+  /// 页码翻页的源：没有游标，到底没有由 [FeedPage.hasMore] 说明。
+  FeedController.paged(this._paged, {this.pageSize = 20}) : _loader = null;
+
+  final Future<FeedPage> Function(String? cursor, {required bool force})?
   _loader;
+  final Future<FeedPage> Function(int page, {required bool force})? _paged;
   final int pageSize;
 
   final List<Status> items = [];
   String? _cursor;
+  int _page = 0;
   bool _started = false;
+  bool _disposed = false;
   bool loading = false;
   bool loadingMore = false;
   bool refreshing = false;
@@ -29,6 +36,17 @@ class FeedController extends ChangeNotifier {
 
   bool get started => _started;
   bool get isEmpty => items.isEmpty;
+
+  /// 页面在请求还没回来时被关掉是很常见的事，别让回来的那一帧再撞上去。
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
 
   Future<void> ensureLoaded() async {
     if (_started) return;
@@ -40,44 +58,58 @@ class FeedController extends ChangeNotifier {
     _started = true;
     refreshing = loading = true;
     error = null;
-    notifyListeners();
+    _notify();
     try {
-      final page = await _loader(null, force: true);
+      final paged = _paged;
+      final page = paged != null
+          ? await paged(1, force: true)
+          : await _loader!(null, force: true);
       items
         ..clear()
         ..addAll(_dedupe(page.items));
+      _page = 1;
       _cursor = page.sinceId;
-      atEnd = page.sinceId == null || page.items.isEmpty;
+      atEnd = paged != null
+          ? page.hasMore == false || page.items.isEmpty
+          : page.sinceId == null || page.items.isEmpty;
     } on Object catch (e) {
       error = e.toString();
     } finally {
       loading = false;
       refreshing = false;
-      notifyListeners();
+      _notify();
     }
   }
 
   Future<void> loadMore() async {
     if (loading || loadingMore || atEnd) return;
     loadingMore = true;
-    notifyListeners();
+    _notify();
     try {
-      final page = await _loader(_cursor, force: false);
+      final paged = _paged;
+      final page = paged != null
+          ? await paged(_page + 1, force: false)
+          : await _loader!(_cursor, force: false);
       final fresh = _dedupe(page.items);
       items.addAll(fresh);
-      final next = page.sinceId;
-      if (next == null ||
-          next.isEmpty ||
-          page.items.isEmpty ||
-          (next == _cursor && fresh.isEmpty)) {
-        atEnd = true;
+      if (paged != null) {
+        _page += 1;
+        if (page.hasMore == false || page.items.isEmpty) atEnd = true;
+      } else {
+        final next = page.sinceId;
+        if (next == null ||
+            next.isEmpty ||
+            page.items.isEmpty ||
+            (next == _cursor && fresh.isEmpty)) {
+          atEnd = true;
+        }
+        _cursor = next ?? _cursor;
       }
-      _cursor = next ?? _cursor;
     } on Object catch (e) {
       error = e.toString();
     } finally {
       loadingMore = false;
-      notifyListeners();
+      _notify();
     }
   }
 
@@ -93,12 +125,12 @@ class FeedController extends ChangeNotifier {
     final index = items.indexWhere((s) => s.id == status.id);
     if (index < 0) return;
     items[index] = status;
-    notifyListeners();
+    _notify();
   }
 
   void remove(String id) {
     items.removeWhere((s) => s.id == id || s.mid == id);
-    notifyListeners();
+    _notify();
   }
 }
 
@@ -168,6 +200,7 @@ class StatusList extends StatefulWidget {
 class _StatusListState extends State<StatusList> {
   ScrollController? _ownedScroll;
   double _lastPixels = 0;
+  bool _loadMoreQueued = false;
 
   ScrollController get _scroll => widget.scrollController ?? (_ownedScroll ??= ScrollController());
 
@@ -278,9 +311,20 @@ class _StatusListState extends State<StatusList> {
         !controller.loading &&
         !controller.loadingMore &&
         !controller.atEnd) {
-      controller.loadMore();
+      _scheduleLoadMore(controller);
     }
     return false;
+  }
+
+  /// 滚动通知有时是在布局里派发的（列表刚变长就起了一次轮），那期间
+  /// 控制器一 notify 就是「帧内调度重建」，所以把续页推到帧末。
+  void _scheduleLoadMore(FeedController controller) {
+    if (_loadMoreQueued) return;
+    _loadMoreQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadMoreQueued = false;
+      if (mounted) controller.loadMore();
+    });
   }
 
   @override

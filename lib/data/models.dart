@@ -983,6 +983,7 @@ class Comment {
     this.source = '',
     this.region = '',
     this.pics = const [],
+    this.status,
   });
 
   final String id;
@@ -992,6 +993,10 @@ class Comment {
   final int likes;
   final bool liked;
   final Comment? reply;
+
+  /// 这条评论所在的微博。详情页里的评论不需要它，消息中心「收到的评论」
+  /// 要靠它显示「评论了你的哪条微博」。
+  final Status? status;
 
   /// 一楼层里内联展示的几条回复，按时间正序。
   final List<Comment> replies;
@@ -1030,10 +1035,17 @@ class Comment {
       source: source,
       region: region,
       pics: pics ?? this.pics,
+      status: status,
     );
   }
 
-  static Comment? from(Map<String, dynamic>? o, {int depth = 0}) {
+  /// [withStatus] 只有消息中心会打开：那里的每条评论都挂着一条完整微博，
+  /// 评论区几十条一起解析会白白多跑一遍 `_parseStatus`。
+  static Comment? from(
+    Map<String, dynamic>? o, {
+    int depth = 0,
+    bool withStatus = false,
+  }) {
     if (o == null) return null;
     final id = o.str('id');
     if (id.isEmpty) return null;
@@ -1060,15 +1072,19 @@ class Comment {
       source: stripHtml(o.str('source')),
       region: o.str('region_name'),
       pics: picsOf(o),
+      status: withStatus ? Status.from(o.obj('status')) : null,
     );
   }
 }
 
 class FeedPage {
-  const FeedPage(this.items, this.sinceId);
+  const FeedPage(this.items, this.sinceId, {this.hasMore});
 
   final List<Status> items;
   final String? sinceId;
+
+  /// 只有页码翻页的源会填：接口直接说这一页之后还有没有。
+  final bool? hasMore;
 
   bool get isEmpty => items.isEmpty;
 }
@@ -1137,6 +1153,47 @@ class TopicItem {
   final String desc2;
   final String scheme;
   final String? containerId;
+}
+
+/// 消息中心「收到的赞」的一条：谁赞了你的哪条微博。
+class LikeNotice {
+  const LikeNotice({
+    required this.id,
+    this.user,
+    this.status,
+    this.createdAt = '',
+    this.source = '',
+  });
+
+  final String id;
+  final User? user;
+
+  /// 被赞的那条微博；微博被删或不可见时为空。
+  final Status? status;
+  final String createdAt;
+  final String source;
+
+  static LikeNotice? from(Map<String, dynamic>? o) {
+    if (o == null) return null;
+    final id = firstNonEmpty([o.str('id'), o.str('idStr')]);
+    if (id.isEmpty) return null;
+    return LikeNotice(
+      id: id,
+      user: User.from(o.obj('user')),
+      status: Status.from(o.obj('status')),
+      createdAt: normalizeWeiboTime(o.str('created_at')),
+      source: stripHtml(o.str('source')),
+    );
+  }
+}
+
+/// 通知列表的一页。接口按 `page=N` 翻页，翻到底回的是 `"data": false`，
+/// 所以「空且 [hasMore] 为 false」就是到底了。
+class NoticeBatch<T> {
+  const NoticeBatch(this.items, {this.hasMore = false});
+
+  final List<T> items;
+  final bool hasMore;
 }
 
 class MessageItem {

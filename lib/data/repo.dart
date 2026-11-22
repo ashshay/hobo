@@ -1802,6 +1802,71 @@ class Repo extends ChangeNotifier {
     return out;
   }
 
+  /// 消息中心统一入口：`message/mentionsAt`、`message/mentionsCmt`、
+  /// `message/cmt`、`message/attitude` 都是 `page=N` 翻页，翻到底时
+  /// `data` 从数组变成 `false`（不是空数组，别按长度判断）。
+  Future<NoticeBatch<T>> _notices<T>(
+    String target,
+    int page,
+    T? Function(Map<String, dynamic>) parse, {
+    bool force = false,
+  }) async {
+    final root = await _get(
+      Api.url(target, {'page': '$page'}),
+      cookie(),
+      force: force,
+    );
+    if (root.intOf('ok', 0) != 1) {
+      throw ApiException(
+        firstNonEmpty([root.str('msg'), '通知加载失败']),
+        root.str('errno'),
+      );
+    }
+    final arr = root.arr('data');
+    if (arr == null || arr.isEmpty) return NoticeBatch<T>(<T>[]);
+    final items = <T>[];
+    for (final item in arr) {
+      final parsed = parse(jObj(item) ?? const {});
+      if (parsed != null) items.add(parsed);
+    }
+    return NoticeBatch<T>(items, hasMore: items.isNotEmpty);
+  }
+
+  /// @我的微博。
+  Future<NoticeBatch<Status>> atMe(int page, {bool force = false}) => _notices(
+    'https://m.weibo.cn/message/mentionsAt',
+    page,
+    Status.from,
+    force: force,
+  );
+
+  /// @我的评论：别人在评论里 @ 了你。
+  Future<NoticeBatch<Comment>> atComments(int page, {bool force = false}) =>
+      _notices(
+        'https://m.weibo.cn/message/mentionsCmt',
+        page,
+        (o) => Comment.from(o, withStatus: true),
+        force: force,
+      );
+
+  /// 收到的评论：别人评论了你的微博。
+  Future<NoticeBatch<Comment>> commentsToMe(int page, {bool force = false}) =>
+      _notices(
+        'https://m.weibo.cn/message/cmt',
+        page,
+        (o) => Comment.from(o, withStatus: true),
+        force: force,
+      );
+
+  /// 收到的赞。
+  Future<NoticeBatch<LikeNotice>> likesToMe(int page, {bool force = false}) =>
+      _notices(
+        'https://m.weibo.cn/message/attitude',
+        page,
+        LikeNotice.from,
+        force: force,
+      );
+
   /// 聊天记录：接口给的是最新在前，群聊接口给的是旧→新，这里统一成最新在前。
   Future<ChatPage> chat({
     String uid = '',
