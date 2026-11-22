@@ -1327,7 +1327,7 @@ class Repo extends ChangeNotifier {
     }
     return CommentPage(
       items,
-      data.str('max_id'),
+      _nextCursor(data.str('max_id')),
       data.intOf('max_id_type'),
     );
   }
@@ -1356,11 +1356,15 @@ class Repo extends ChangeNotifier {
     final total = root.intOf('total_number');
     return CommentPage(
       items,
-      root.str('max_id'),
+      _nextCursor(root.str('max_id')),
       root.intOf('max_id_type'),
       total > 0 ? total : 0,
     );
   }
+
+  /// `max_id` 回来是 `0` 就是没有下一页了：热门榜拿它当结束标记，不是游标。
+  /// 当成空串交给上层，按钮才会显示「没有更多」，而不是再请求一次首页。
+  static String _nextCursor(String raw) => raw == '0' ? '' : raw;
 
   /// 正文里的 @ 只有昵称，用用户搜索换回 uid，点 @ 才能在应用内打开主页。
   Future<String?> uidForName(String name) async {

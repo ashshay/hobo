@@ -140,6 +140,19 @@ String firstNonEmpty(List<String> values) {
   return '';
 }
 
+/// 追加去重：评论按页翻的时候，热门页之间本来就会重叠，按时间翻的列表还会
+/// 被新评论往下挤，同一个 id 会重复出现。返回真正新增了几条。
+int appendUnique<T>(List<T> target, Iterable<T> incoming, String Function(T) keyOf) {
+  final seen = target.map(keyOf).toSet();
+  var added = 0;
+  for (final item in incoming) {
+    if (!seen.add(keyOf(item))) continue;
+    target.add(item);
+    added++;
+  }
+  return added;
+}
+
 final _coverCrop = RegExp(r'^(https?://[^/]+)/crop\.[^/]+/(.+)$');
 
 /// `cover_image_phone` 给的是 640 方图的裁剪地址，拆开后把裁剪段换成 `large` 拿原图。

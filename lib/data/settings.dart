@@ -83,6 +83,29 @@ class AccentPreset {
   final int argb;
 }
 
+/// 视频倍速。播放器里换档、设置里的默认值都走这一套。
+enum VideoSpeed {
+  half(0.5, '0.5x'),
+  threeQuarters(0.75, '0.75x'),
+  normal(1, '1.0x'),
+  fiveQuarters(1.25, '1.25x'),
+  oneHalf(1.5, '1.5x'),
+  twice(2, '2.0x');
+
+  const VideoSpeed(this.rate, this.label);
+
+  final double rate;
+  final String label;
+
+  static VideoSpeed fromRate(double? rate) {
+    final value = rate ?? normal.rate;
+    for (final speed in values) {
+      if ((speed.rate - value).abs() < 0.01) return speed;
+    }
+    return normal;
+  }
+}
+
 /// 桌面图标形状。两套位图都打进 APK，靠 `AndroidManifest.xml` 里的 activity-alias 切换，
 /// 实际开关在 `lib/data/app_icon.dart`。
 enum AppIconShape {
@@ -154,6 +177,7 @@ class Settings extends ChangeNotifier {
   bool _profileTabAvatar = true;
   bool _reverseBrowse = false;
   ImageBrowseQuality _imageBrowseQuality = ImageBrowseQuality.standard;
+  VideoSpeed _videoSpeed = VideoSpeed.normal;
   AppIconShape _iconShape = AppIconShape.rounded;
   Set<HotBoard> _hotBoards = HotBoard.values.toSet();
   int _updateCheckedAt = 0;
@@ -203,6 +227,7 @@ class Settings extends ChangeNotifier {
     _imageBrowseQuality = ImageBrowseQuality.fromKey(
       _prefs.getString('image_browse_quality'),
     );
+    _videoSpeed = VideoSpeed.fromRate(_prefs.getDouble('video_speed'));
     _iconShape = AppIconShape.fromKey(_prefs.getString('icon_shape'));
     _hotBoards = parseHotBoards(_prefs.getString('hot_boards'));
     _updateCheckedAt = _prefs.getInt('update_checked_at') ?? 0;
@@ -236,6 +261,7 @@ class Settings extends ChangeNotifier {
   bool get profileTabAvatar => _profileTabAvatar;
   bool get reverseBrowse => _reverseBrowse;
   ImageBrowseQuality get imageBrowseQuality => _imageBrowseQuality;
+  VideoSpeed get videoSpeed => _videoSpeed;
   AppIconShape get iconShape => _iconShape;
   Set<HotBoard> get hotBoards => _hotBoards;
   int get updateCheckedAt => _updateCheckedAt;
@@ -396,6 +422,12 @@ class Settings extends ChangeNotifier {
   void applyImageBrowseQuality(ImageBrowseQuality value) {
     _imageBrowseQuality = value;
     _prefs.setString('image_browse_quality', value.key);
+    notifyListeners();
+  }
+
+  void applyVideoSpeed(VideoSpeed value) {
+    _videoSpeed = value;
+    _prefs.setDouble('video_speed', value.rate);
     notifyListeners();
   }
 

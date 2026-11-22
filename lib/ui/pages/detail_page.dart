@@ -36,6 +36,10 @@ class _DetailPageState extends State<DetailPage> {
   String _maxId = '';
   int _maxIdType = 0;
   int _page = 1;
+
+  /// 连续几页没有一条新评论。热门 / 按时间翻页时页与页会重叠，
+  /// 一页全重复不代表真到底了，给两页机会再收尾。
+  int _dryMore = 0;
   CommentSort _sort = CommentSort.hot;
 
   @override
@@ -89,21 +93,31 @@ class _DetailPageState extends State<DetailPage> {
         page: more && _sort == CommentSort.time ? _page + 1 : 1,
       );
       if (!mounted) return;
+      var added = page.items.length;
       setState(() {
         if (more) {
-          _comments.addAll(page.items);
+          added = appendUnique(_comments, page.items, (comment) => comment.id);
+          _dryMore = added == 0 ? _dryMore + 1 : 0;
         } else {
+          _dryMore = 0;
           _comments
             ..clear()
             ..addAll(page.items);
         }
         if (_sort == CommentSort.hot) {
-          _maxId = page.maxId;
+          final nextMax = page.maxId;
+          // 游标不往前走就是到底了；一页全是拿过的（热门页本来就重叠）再给一页机会。
+          _end =
+              _end ||
+              page.items.isEmpty ||
+              nextMax.isEmpty ||
+              nextMax == _maxId ||
+              _dryMore >= 2;
+          _maxId = nextMax.isEmpty ? _maxId : nextMax;
           _maxIdType = page.maxIdType;
-          _end = page.items.isEmpty || page.maxId.isEmpty;
         } else {
           _page = more ? _page + 1 : 1;
-          _end = page.nextPage == 0 || page.items.isEmpty;
+          _end = page.nextPage == 0 || page.items.isEmpty || _dryMore >= 2;
         }
       });
     } on Object catch (e) {
@@ -127,6 +141,7 @@ class _DetailPageState extends State<DetailPage> {
       _maxId = '';
       _maxIdType = 0;
       _page = 1;
+      _dryMore = 0;
       _end = false;
     });
     _loadComments();

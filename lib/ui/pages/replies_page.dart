@@ -36,6 +36,9 @@ class _RepliesPageState extends State<RepliesPage> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _atEnd = false;
+
+  /// 连续几页没有新回复：游标翻页的页与页之间会重叠，一页全重复不算到底。
+  int _dryMore = 0;
   String? _error;
 
   @override
@@ -61,10 +64,13 @@ class _RepliesPageState extends State<RepliesPage> {
         maxIdType: _maxIdType,
       );
       if (!mounted) return;
+      var added = page.items.length;
       setState(() {
         if (more) {
-          _replies.addAll(page.items);
+          added = appendUnique(_replies, page.items, (comment) => comment.id);
+          _dryMore = added == 0 ? _dryMore + 1 : 0;
         } else {
+          _dryMore = 0;
           _replies
             ..clear()
             ..addAll(page.items);
@@ -73,7 +79,9 @@ class _RepliesPageState extends State<RepliesPage> {
         _maxIdType = page.maxIdType;
         _total = page.nextPage;
         _atEnd =
-            page.items.isEmpty || (page.maxId.isEmpty && page.items.length < 10);
+            page.items.isEmpty ||
+            _dryMore >= 2 ||
+            (page.maxId.isEmpty && page.items.length < 10);
         _loading = false;
         _loadingMore = false;
       });

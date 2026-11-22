@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 import '../../data/media_saver.dart';
 import '../../data/models.dart';
 import '../../data/repo.dart';
+import '../../data/settings.dart';
 import '../routes.dart';
 import '../widgets/common.dart';
 import '../widgets/glyphs.dart';
@@ -27,6 +28,7 @@ class _VideoPageState extends State<VideoPage> {
   bool _loading = true;
   String? _error;
   late VideoQuality? _quality = widget.video.current;
+  late VideoSpeed _speed = VideoSpeed.normal;
   bool _saving = false;
   double _saveProgress = 0;
 
@@ -35,6 +37,8 @@ class _VideoPageState extends State<VideoPage> {
   @override
   void initState() {
     super.initState();
+    // 倍速跟着设置走：上一篇调过的档，下一篇打开还是它。
+    _speed = context.read<Settings>().videoSpeed;
     WidgetsBinding.instance.addPostFrameCallback((_) => _init());
   }
 
@@ -86,6 +90,8 @@ class _VideoPageState extends State<VideoPage> {
         _error = null;
       });
       await previous?.dispose();
+      // 换清晰度会新建控制器，倍速得重新设一遍。
+      await controller.setPlaybackSpeed(_speed.rate);
       if (startAt != null && startAt > Duration.zero) {
         await controller.seekTo(startAt);
       }
@@ -146,6 +152,27 @@ class _VideoPageState extends State<VideoPage> {
     });
     final ok = await _init(startAt: position, play: wasPlaying);
     if (!ok && mounted) setState(() => _quality = previous);
+  }
+
+  Future<void> _pickSpeed() async {
+    final picked = await showHoboChoices<VideoSpeed>(
+      context,
+      title: '播放速度',
+      choices: [
+        for (final speed in VideoSpeed.values)
+          HoboChoice(
+            value: speed,
+            label: speed.label,
+            subtitle: speed == VideoSpeed.normal ? '原速' : null,
+            selected: speed == _speed,
+          ),
+      ],
+    );
+    if (picked == null || !mounted || picked == _speed) return;
+    setState(() => _speed = picked);
+    // 记进设置：退出播放器后再进来还是这一档。
+    context.read<Settings>().applyVideoSpeed(picked);
+    await _controller?.setPlaybackSpeed(picked.rate);
   }
 
   Future<void> _save() async {
@@ -272,6 +299,8 @@ class _VideoPageState extends State<VideoPage> {
               bottom: 0,
               child: _Controls(
                 controller: _controller!,
+                speed: _speed,
+                onPickSpeed: _pickSpeed,
                 onToggle: _toggle,
               ),
             ),
@@ -370,9 +399,16 @@ class _PlayOverlay extends StatelessWidget {
 }
 
 class _Controls extends StatelessWidget {
-  const _Controls({required this.controller, required this.onToggle});
+  const _Controls({
+    required this.controller,
+    required this.speed,
+    required this.onPickSpeed,
+    required this.onToggle,
+  });
 
   final VideoPlayerController controller;
+  final VideoSpeed speed;
+  final VoidCallback onPickSpeed;
   final VoidCallback onToggle;
 
   @override
@@ -405,7 +441,7 @@ class _Controls extends StatelessWidget {
               GestureDetector(
                 onTap: onToggle,
                 child: GlyphIcon(
-                  value.isPlaying ? HoboGlyphs.play : HoboGlyphs.play,
+                  value.isPlaying ? HoboGlyphs.pause : HoboGlyphs.play,
                   size: 20,
                   color: const Color(0xFFFFFFFF),
                 ),
@@ -457,6 +493,31 @@ class _Controls extends StatelessWidget {
                 style: AppTextStyle.caption1.of(context).copyWith(
                   fontSize: 11,
                   color: const Color(0xFFFFFFFF),
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: onPickSpeed,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 44),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  alignment: Alignment.center,
+                  decoration: const ShapeDecoration(
+                    color: Color(0x33FFFFFF),
+                    shape: AppShape.full,
+                  ),
+                  child: Text(
+                    speed.label,
+                    style: AppTextStyle.caption1.of(context).copyWith(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFFFFFFF),
+                    ),
+                  ),
                 ),
               ),
             ],

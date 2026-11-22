@@ -151,6 +151,15 @@ class _SettingsPageState extends State<SettingsPage> {
                 showChevron: true,
                 onPressed: () => _pickImageQuality(settings),
               ),
+              HoboRow(
+                title: '视频倍速',
+                subtitle: settings.videoSpeed == VideoSpeed.normal
+                    ? '原速播放'
+                    : '默认 ${settings.videoSpeed.label}',
+                leading: const GlyphIcon(HoboGlyphs.play, size: 20),
+                showChevron: true,
+                onPressed: () => _pickVideoSpeed(settings),
+              ),
             ],
           ),
           HoboSection(
@@ -449,6 +458,20 @@ class _SettingsPageState extends State<SettingsPage> {
       actions: [
         for (final quality in ImageBrowseQuality.values)
           (quality.label, () => settings.applyImageBrowseQuality(quality)),
+      ],
+    );
+  }
+
+  Future<void> _pickVideoSpeed(Settings settings) async {
+    await showHoboActionSheet(
+      context,
+      title: '视频倍速',
+      actions: [
+        for (final speed in VideoSpeed.values)
+          (
+            speed == VideoSpeed.normal ? '${speed.label}（原速）' : speed.label,
+            () => settings.applyVideoSpeed(speed),
+          ),
       ],
     );
   }
