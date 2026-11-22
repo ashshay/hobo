@@ -50,7 +50,7 @@
       <div>
         <p class="badge">
           <span class="dot" aria-hidden="true"></span>
-          最新版本 <strong>1.06.0</strong> · build 8
+          最新版本 <strong>1.07.0</strong> · build 9
         </p>
         <h1>微博客户端，<br><span>换个做法</span>。</h1>
         <p class="hero-lead">
@@ -202,7 +202,7 @@
             <p>
               在手机浏览器里打开
               <a href="https://github.com/ashshay/hobo/releases/latest">Releases 页面</a>，
-              点 <code>hobo-1.06.0-arm64.apk</code>。
+              点 <code>hobo-1.07.0-arm64.apk</code>。
             </p>
           </li>
           <li>
@@ -218,7 +218,7 @@
         <aside class="panel">
           <h3>这一版的包</h3>
           <dl class="spec">
-            <dt>版本</dt><dd>1.06.0（versionCode 8）</dd>
+            <dt>版本</dt><dd>1.07.0（versionCode 9）</dd>
             <dt>ABI</dt><dd>arm64-v8a</dd>
             <dt>大小</dt><dd>约 20 MB</dd>
             <dt>minSdk</dt><dd>24（Android 7.0）</dd>
@@ -230,7 +230,7 @@
           </p>
           <h3>用 adb 装</h3>
           <pre class="code"><code><span class="c"># 下载后</span>
-adb install -r hobo-1.06.0-arm64.apk</code></pre>
+adb install -r hobo-1.07.0-arm64.apk</code></pre>
         </aside>
       </div>
     </div>
@@ -245,6 +245,16 @@ adb install -r hobo-1.06.0-arm64.apk</code></pre>
       </div>
 
       <ol class="log">
+        <li>
+          <h3>1.07.0 <time>2026-11-22</time></h3>
+          <ul>
+            <li>视频支持 <strong>0.5x / 0.75x / 1.0x / 1.25x / 1.5x / 2.0x 倍速</strong>：播放器进度条右侧一枚倍速胶囊即点即换，换清晰度后仍然保持。</li>
+            <li>倍速会记住：设置 → 浏览 →「视频倍速」里可以改默认值，下次打开视频还是这一档。</li>
+            <li>修复「加载更多评论」会加载出重复评论：热门榜翻到底时接口把游标回成 <code>0</code>，之前被当成有效游标，再点一次等于把第一页重贴一遍。</li>
+            <li>评论翻页改为按 id 去重（按时间排序时列表会被新评论往下挤，相邻页本来就会重叠），连续两页都没有新内容才收尾。</li>
+            <li>修复播放器底部播放/暂停图标一直是播放态。</li>
+          </ul>
+        </li>
         <li>
           <h3>1.06.0 <time>2026-11-22</time></h3>
           <ul>

@@ -6,7 +6,7 @@ Hobo 是 Cobo 的 **Flutter / Dart 重写版**：同一个微博客户端，界�
 
 - 应用名：**Hobo**
 - 包名：`com.hobo.app`
-- 版本：`1.06.0+8`（界面显示 `1.06`）
+- 版本：`1.07.0+9`（界面显示 `1.07`）
 - 依赖：Flutter 3.47.6（Dart 3.13），`prism_ui` 以本地 path 依赖引入
 - 仓库：<https://github.com/ashshay/hobo> · 站点：<https://ashshay.github.io/hobo/>
 
@@ -14,11 +14,11 @@ Hobo 是 Cobo 的 **Flutter / Dart 重写版**：同一个微博客户端，界�
 
 | 包 | 路径 | 说明 |
 | --- | --- | --- |
-| release | `build/app/outputs/flutter-apk/app-release.apk` | 约 20 MB，`1.06.0 (8)`，**arm64 手机专用**（AOT，含最新改动） |
-| debug | `build/app/outputs/flutter-apk/app-debug.apk` | 约 232 MB，`1.06.0 (8)`，含三种 ABI，模拟器/调试用 |
+| release | `build/app/outputs/flutter-apk/app-release.apk` | 约 20 MB，`1.07.0 (9)`，**arm64 手机专用**（AOT，含最新改动） |
+| debug | `build/app/outputs/flutter-apk/app-debug.apk` | 约 232 MB，`1.07.0 (9)`，含三种 ABI，模拟器/调试用 |
 
 公开下载走 GitHub Releases：<https://github.com/ashshay/hobo/releases/latest>
-（资产名 `hobo-1.06.0-arm64.apk`）。
+（资产名 `hobo-1.07.0-arm64.apk`）。
 
 ```powershell
 adb install -r build\app\outputs\flutter-apk\app-release.apk
