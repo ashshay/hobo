@@ -2,7 +2,7 @@ name: hobo
 description: "Hobo — 微博客户端，prism_ui 设计语言，Flutter 实现。"
 publish_to: 'none'
 
-version: 1.07.0+9
+version: 1.08.0+10
 
 environment:
   sdk: ^3.13.5

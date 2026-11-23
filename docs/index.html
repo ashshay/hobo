@@ -50,7 +50,7 @@
       <div>
         <p class="badge">
           <span class="dot" aria-hidden="true"></span>
-          最新版本 <strong>1.07.0</strong> · build 9
+          最新版本 <strong>1.08.0</strong> · build 10
         </p>
         <h1>微博客户端，<br><span>换个做法</span>。</h1>
         <p class="hero-lead">
@@ -202,7 +202,7 @@
             <p>
               在手机浏览器里打开
               <a href="https://github.com/ashshay/hobo/releases/latest">Releases 页面</a>，
-              点 <code>hobo-1.07.0-arm64.apk</code>。
+              点 <code>hobo-1.08.0-arm64.apk</code>。
             </p>
           </li>
           <li>
@@ -218,7 +218,7 @@
         <aside class="panel">
           <h3>这一版的包</h3>
           <dl class="spec">
-            <dt>版本</dt><dd>1.07.0（versionCode 9）</dd>
+            <dt>版本</dt><dd>1.08.0（versionCode 10）</dd>
             <dt>ABI</dt><dd>arm64-v8a</dd>
             <dt>大小</dt><dd>约 20 MB</dd>
             <dt>minSdk</dt><dd>24（Android 7.0）</dd>
@@ -230,7 +230,7 @@
           </p>
           <h3>用 adb 装</h3>
           <pre class="code"><code><span class="c"># 下载后</span>
-adb install -r hobo-1.07.0-arm64.apk</code></pre>
+adb install -r hobo-1.08.0-arm64.apk</code></pre>
         </aside>
       </div>
     </div>
@@ -245,6 +245,17 @@ adb install -r hobo-1.07.0-arm64.apk</code></pre>
       </div>
 
       <ol class="log">
+        <li>
+          <h3>1.08.0 <time>2026-11-23</time></h3>
+          <ul>
+            <li>全站胶囊切换器从固定时长补间换成<strong>物理弹簧</strong>：连点不会「刹停再起步」，到点自然微回弹，滑行时滑块会随速度拉伸、撞到两端还会压墙回弹。</li>
+            <li>胶囊滑块与页面内容<strong>共用同一条弹簧</strong>：点胶囊、按住滑块拖、手指横滑页面三种操作永远同步，中途改主意也是带着当前速度平滑转向。</li>
+            <li>首页顶栏栏目条改成消息页那套<strong>居中胶囊</strong>，栏目多时按文字宽度排布并横向滚动、两端渐隐；每个栏目各记各的滚动位置。</li>
+            <li>消息页四格、@我 里的两格、发现页的综合/用户/话题、话题页的六个频道、超话的栏目——都能横滑翻页，滑到跟前才挂载，切回来内容还在。</li>
+            <li>评论区按<strong>楼层卡片</strong>重做：一层一张卡，昵称后面跟 V / 会员 / 博主标，副标题写明「几楼 · 时间 · 来源 · IP」，楼中楼预览块整块铺满、文字统一左对齐，底部一排「赞 / 回复」胶囊按钮。</li>
+            <li>发现页去掉题头，<strong>搜索框直接占顶栏</strong>；右上角的「清除」并入搜索框自带的 ✕。</li>
+          </ul>
+        </li>
         <li>
           <h3>1.07.0 <time>2026-11-22</time></h3>
           <ul>
