@@ -396,24 +396,25 @@ class _DetailPageState extends State<DetailPage> {
             ),
           )
         else
-          for (final comment in _comments)
+          for (var i = 0; i < _comments.length; i++)
             CommentTile(
-              comment: comment,
+              comment: _comments[i],
+              floor: i + 1,
               authorId: status.user?.id ?? '',
-              onReply: () => _reply(comment),
-              onLike: () => _likeComment(comment),
+              onReply: () => _reply(_comments[i]),
+              onLike: () => _likeComment(_comments[i]),
               onUser: (user) => openUser(context, user),
               onLink: (url) => handleLink(context, url),
               onOpenImage: (pics, index) =>
                   openImages(context, pics: pics, index: index),
               onLongPressImage: (pics, index) =>
                   showImageActions(context, pics: pics, index: index),
-              // 「共 N 条回复」展开这一层的全部回复。
+              // 「查看全部 N 条回复」展开这一层的全部回复。
               onOpenReplies: () => openReplies(
                 context,
                 statusId: status.id,
                 mid: status.mid,
-                comment: comment,
+                comment: _comments[i],
                 authorId: status.user?.id ?? '',
               ),
             ),

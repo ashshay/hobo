@@ -134,7 +134,6 @@ class _RepliesPageState extends State<RepliesPage> {
           CommentTile(
             comment: widget.comment,
             authorId: widget.authorId,
-            showDivider: false,
             onUser: (user) => openUser(context, user),
             onLink: (url) => handleLink(context, url),
             onOpenImage: (pics, index) =>
@@ -182,6 +181,7 @@ class _RepliesPageState extends State<RepliesPage> {
               CommentTile(
                 comment: reply,
                 authorId: widget.authorId,
+                nested: true,
                 onUser: (user) => openUser(context, user),
                 onLink: (url) => handleLink(context, url),
                 onOpenImage: (pics, index) =>

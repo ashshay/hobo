@@ -9,9 +9,11 @@ import '../../data/models.dart';
 import '../../data/repo.dart';
 import '../../data/settings.dart';
 import '../routes.dart';
+import '../widgets/capsule.dart';
 import '../widgets/common.dart';
 import '../widgets/feed_list.dart';
 import '../widgets/glyphs.dart';
+import '../widgets/pager.dart';
 import '../widgets/user_list.dart';
 
 enum _SearchMode { feed, users, topics }
@@ -27,12 +29,21 @@ class SearchPage extends StatefulWidget {
   State<SearchPage> createState() => _SearchPageState();
 }
 
-class _SearchPageState extends State<SearchPage> {
+class _SearchPageState extends State<SearchPage> with TickerProviderStateMixin {
   late final TextEditingController _input = TextEditingController(
     text: widget.initialQuery,
   );
   final FocusNode _focus = FocusNode();
   Timer? _debounce;
+
+  /// 胶囊与三个结果页共用的一条弹簧。
+  late final HoboPagerController _pager = HoboPagerController(
+    vsync: this,
+    count: _SearchMode.values.length,
+  );
+
+  /// 只挂载点过的分类：三个结果列表一起请求没必要。
+  final Set<_SearchMode> _mounted = {_SearchMode.feed};
 
   String _query = '';
   _SearchMode _mode = _SearchMode.feed;
@@ -63,7 +74,17 @@ class _SearchPageState extends State<SearchPage> {
     _debounce?.cancel();
     _input.dispose();
     _focus.dispose();
+    _pager.dispose();
+    _feed?.dispose();
+    _users?.dispose();
     super.dispose();
+  }
+
+  /// 横滑经过哪一格就先挂上哪一格，松手落格时内容已经在了。
+  void _mount(int index) {
+    final mode = _SearchMode.values[index];
+    if (_mounted.contains(mode)) return;
+    setState(() => _mounted.add(mode));
   }
 
   void _onInputChanged() {
@@ -120,10 +141,15 @@ class _SearchPageState extends State<SearchPage> {
       ..selection = TextSelection.collapsed(offset: query.length);
     _focus.unfocus();
     context.read<Settings>().pushSearchHistory(query);
+    _feed?.dispose();
+    _users?.dispose();
     setState(() {
       _query = query;
       _suggestions = const [];
       _mode = _SearchMode.feed;
+      _mounted
+        ..clear()
+        ..add(_SearchMode.feed);
       _feed = FeedController((cursor, {required force}) async {
         final page = int.tryParse(cursor ?? '1') ?? 1;
         final result = await context.read<Repo>().search(
@@ -139,13 +165,14 @@ class _SearchPageState extends State<SearchPage> {
       _users = null;
       _topics = const [];
     });
+    _pager.jumpToPage(0);
     _feed?.ensureLoaded();
-    if (_mode == _SearchMode.topics) _loadTopics();
   }
 
   void _switchMode(_SearchMode mode) {
     setState(() {
       _mode = mode;
+      _mounted.add(mode);
       if (mode == _SearchMode.users && _users == null) {
         final query = _query;
         _users = UserListController(
@@ -183,36 +210,19 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 不要题头：搜索框直接占顶栏这一行，内容紧贴着它往下排。
     return PrismScaffold(
       bar: HoboAppBar(
         leading: widget.showBack ? const HoboBackButton() : null,
-        title: const Text('发现'),
-        actions: [
-          if (_query.isNotEmpty)
-            HoboBarAction(
-              label: '清除',
-              onPressed: () {
-                _input.clear();
-                setState(() {
-                  _query = '';
-                  _feed = null;
-                  _users = null;
-                  _topics = const [];
-                });
-                _loadHot();
-              },
-            ),
-        ],
-      ),
-      headerBuilder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-        child: SearchField(
+        title: SearchField(
           controller: _input,
           focusNode: _focus,
           hintText: '搜索微博、用户、话题',
           onSubmitted: () => _submit(_input.text),
           onChanged: (_) {},
         ),
+        titleSpacing: widget.showBack ? 0 : 16,
+        toolbarHeight: 56,
       ),
       body: _buildBody(),
     );
@@ -223,24 +233,43 @@ class _SearchPageState extends State<SearchPage> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: SegmentedControl<_SearchMode>(
-            segments: const [
-              (_SearchMode.feed, '综合'),
-              (_SearchMode.users, '用户'),
-              (_SearchMode.topics, '话题'),
-            ],
-            value: _mode,
-            onChanged: _switchMode,
+          padding: EdgeInsets.fromLTRB(16, pageTopInset(context), 16, 8),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 264),
+              child: HoboCapsule<_SearchMode>(
+                segments: const [
+                  (_SearchMode.feed, '综合'),
+                  (_SearchMode.users, '用户'),
+                  (_SearchMode.topics, '话题'),
+                ],
+                value: _mode,
+                onChanged: _switchMode,
+                pageController: _pager,
+              ),
+            ),
           ),
         ),
-        Expanded(child: _buildResults()),
+        Expanded(
+          child: HoboPager(
+            controller: _pager,
+            index: _mode.index,
+            onIndexChanged: (index) => _switchMode(_SearchMode.values[index]),
+            onNeedsPage: _mount,
+            children: [
+              for (final mode in _SearchMode.values)
+                _mounted.contains(mode)
+                    ? _resultsFor(mode)
+                    : const SizedBox.shrink(),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildResults() {
-    switch (_mode) {
+  Widget _resultsFor(_SearchMode mode) {
+    switch (mode) {
       case _SearchMode.feed:
         final feed = _feed;
         if (feed == null) return const SizedBox.shrink();
@@ -471,7 +500,12 @@ class _SearchPageState extends State<SearchPage> {
     }
 
     return ListView(
-      padding: EdgeInsets.fromLTRB(16, 4, 16, pageBottomInset(context)),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        pageTopInset(context),
+        16,
+        pageBottomInset(context),
+      ),
       children: children,
     );
   }
@@ -487,40 +521,68 @@ class TopicPage extends StatefulWidget {
   State<TopicPage> createState() => _TopicPageState();
 }
 
-class _TopicPageState extends State<TopicPage> {
+class _TopicPageState extends State<TopicPage> with TickerProviderStateMixin {
+  static const _channels = TopicChannel.values;
+
   TopicChannel _channel = TopicChannel.comprehensive;
-  FeedController? _feed;
+  final Map<TopicChannel, FeedController> _feeds = {};
+  final Set<TopicChannel> _mounted = {TopicChannel.comprehensive};
+
+  /// 胶囊与六个频道页共用的一条弹簧。
+  late final HoboPagerController _pager = HoboPagerController(
+    vsync: this,
+    count: _channels.length,
+  );
 
   @override
   void initState() {
     super.initState();
-    _createController();
-  }
-
-  void _createController() {
-    final query = widget.query;
-    final channel = _channel;
-    _feed = FeedController(
-      (cursor, {required force}) =>
-          context.read<Repo>().topicChannelFeed(
-            query,
-            channel,
-            cursor: cursor,
-            force: force,
-          ),
-    );
-    _feed!.ensureLoaded();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _feedFor(_channel));
   }
 
   @override
   void dispose() {
-    _feed?.dispose();
+    _pager.dispose();
+    for (final feed in _feeds.values) {
+      feed.dispose();
+    }
     super.dispose();
+  }
+
+  void _mount(int index) {
+    final channel = _channels[index];
+    if (_mounted.contains(channel)) return;
+    setState(() => _mounted.add(channel));
+  }
+
+  /// 每个频道一条流：切回来时已加载的内容和滚动位置都还在。
+  FeedController _feedFor(TopicChannel channel) {
+    return _feeds.putIfAbsent(channel, () {
+      final controller = FeedController(
+        (cursor, {required force}) => context.read<Repo>().topicChannelFeed(
+          widget.query,
+          channel,
+          cursor: cursor,
+          force: force,
+        ),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (mounted) await controller.ensureLoaded();
+      });
+      return controller;
+    });
+  }
+
+  void _selectChannel(TopicChannel channel) {
+    if (channel == _channel) return;
+    setState(() {
+      _channel = channel;
+      _mounted.add(channel);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final feed = _feed;
     final label = widget.query.startsWith('#')
         ? widget.query
         : '#${widget.query}#';
@@ -531,46 +593,45 @@ class _TopicPageState extends State<TopicPage> {
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(16, pageTopInset(context), 16, 8),
-            child: SizedBox(
-              height: 40,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: TopicChannel.values.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final channel = TopicChannel.values[index];
-                  return Chip(
-                    label: channel.label,
-                    selected: channel == _channel,
-                    onPressed: () {
-                      setState(() => _channel = channel);
-                      _createController();
-                    },
-                  );
-                },
-              ),
+            child: HoboCapsule<TopicChannel>(
+              segments: [for (final channel in _channels) (channel, channel.label)],
+              value: _channel,
+              onChanged: _selectChannel,
+              pageController: _pager,
             ),
           ),
           Expanded(
-            child: feed == null
-                ? const SizedBox.shrink()
-                : StatusList(
-                    controller: feed,
-                    padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    dockInset: false,
-                    emptyTitle: '这个话题还没有内容',
-                    onOpenStatus: (status) => openStatus(context, status),
-                    onOpenUser: (user) => openUser(context, user),
-                    onOpenImage: (pics, index) =>
-                        openImages(context, pics: pics, index: index),
-                    onOpenVideo: (video) => openVideo(context, video),
-                    onLink: (url) => handleLink(context, url),
-                    onLongPressStatus: (status) =>
-                        showStatusActions(context, status),
-                  ),
+            child: HoboPager(
+              controller: _pager,
+              index: _channels.indexOf(_channel),
+              onIndexChanged: (index) => _selectChannel(_channels[index]),
+              onNeedsPage: _mount,
+              children: [
+                for (final channel in _channels)
+                  _mounted.contains(channel)
+                      ? _listFor(channel)
+                      : const SizedBox.shrink(),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _listFor(TopicChannel channel) {
+    return StatusList(
+      controller: _feedFor(channel),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+      dockInset: false,
+      emptyTitle: '这个话题还没有内容',
+      onOpenStatus: (status) => openStatus(context, status),
+      onOpenUser: (user) => openUser(context, user),
+      onOpenImage: (pics, index) =>
+          openImages(context, pics: pics, index: index),
+      onOpenVideo: (video) => openVideo(context, video),
+      onLink: (url) => handleLink(context, url),
+      onLongPressStatus: (status) => showStatusActions(context, status),
     );
   }
 }

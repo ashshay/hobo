@@ -10,13 +10,15 @@ import '../../data/repo.dart';
 import '../../data/settings.dart';
 import '../chrome.dart';
 import '../routes.dart';
+import '../widgets/capsule.dart';
 import '../widgets/common.dart';
 import '../widgets/feed_list.dart';
 import '../widgets/glyphs.dart';
+import '../widgets/pager.dart';
 import '../widgets/press_scale.dart';
 import '../widgets/scroll_anchor.dart';
 
-/// 首页：一条按栏目切换的微博流。
+/// 首页：一条按栏目切换的微博流。顶栏胶囊与信息流共用一条弹簧，左右滑也能翻。
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
 
@@ -24,10 +26,17 @@ class FeedPage extends StatefulWidget {
   State<FeedPage> createState() => _FeedPageState();
 }
 
-class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
+class _FeedPageState extends State<FeedPage>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
+  static const double _toolbarHeight = 56;
+  static const double _tabsHeight = 46;
+
   final Map<String, FeedController> _controllers = {};
-  final ScrollController _scroll = ScrollController();
+  final Map<String, ScrollController> _scrolls = {};
   final Set<String> _restoredKeys = {};
+
+  /// 已经挂载过的栏目：没点过的栏目等滑到跟前再挂，别一进 App 就拉全部。
+  final Set<String> _mounted = {};
   List<FollowGroup> _groups = const [];
   bool _groupsLoaded = false;
   ChromeController? _chrome;
@@ -38,8 +47,9 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
   int _seenHomeRequests = 0;
   bool _restoring = false;
   String _displayedTabKey = '';
-  double _swipeDx = 0;
-  int _switchDirection = 1;
+
+  /// 顶栏胶囊与信息流共用的一条弹簧。
+  late final HoboPagerController _pager = HoboPagerController(vsync: this);
 
   @override
   void initState() {
@@ -67,7 +77,13 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
     _saveTimer?.cancel();
     _saveAnchor();
     _chrome?.removeListener(_handleChromeCommand);
-    _scroll.dispose();
+    _pager.dispose();
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    for (final scroll in _scrolls.values) {
+      scroll.dispose();
+    }
     super.dispose();
   }
 
@@ -93,8 +109,9 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
   }
 
   void _scrollToTop() {
-    if (!_scroll.hasClients) return;
-    _scroll.animateTo(
+    final scroll = _scrolls[_activeTabKey];
+    if (scroll == null || !scroll.hasClients) return;
+    scroll.animateTo(
       0,
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
@@ -123,36 +140,13 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
     await _refreshToLatest();
   }
 
-  void _handleSwipeStart(DragStartDetails details) => _swipeDx = 0;
-
-  void _handleSwipeUpdate(DragUpdateDetails details) {
-    _swipeDx += details.delta.dx;
-  }
-
-  /// 左右滑动切换栏目：甩得够快，或拖过一小段就翻一栏。
-  void _handleSwipeEnd(DragEndDetails details) {
-    final dx = _swipeDx;
-    _swipeDx = 0;
-    final velocity = details.primaryVelocity ?? 0;
-    final bool goNext;
-    if (velocity.abs() >= 300) {
-      goNext = velocity < 0;
-    } else if (dx.abs() >= 40) {
-      goNext = dx < 0;
-    } else {
-      return;
-    }
-    _stepTab(goNext ? 1 : -1);
-  }
-
-  void _stepTab(int step) {
+  /// 横滑经过哪一栏就先把它挂上，松手落格时内容已经在了。
+  void _mount(int index) {
     final tabs = _tabsFor();
-    if (tabs.length < 2) return;
-    var index = tabs.indexWhere((tab) => tab.key == _displayedTabKey);
-    if (index < 0) index = 0;
-    final next = (index + step).clamp(0, tabs.length - 1);
-    if (next == index) return;
-    _select(tabs[next]);
+    if (index < 0 || index >= tabs.length) return;
+    final key = tabs[index].key;
+    if (_mounted.contains(key)) return;
+    setState(() => _mounted.add(key));
   }
 
   /// 下滑藏起顶栏与底栏，上滑或到顶重新露出。
@@ -167,7 +161,10 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
       chrome.setHidden(false);
       return;
     }
-    final pixels = _scroll.hasClients ? _scroll.position.pixels : 0;
+    final scroll = _scrolls[_activeTabKey];
+    final pixels = scroll != null && scroll.hasClients
+        ? scroll.position.pixels
+        : 0;
     if (delta > 0.5 && pixels > 240) {
       chrome.setHidden(true);
     } else if (delta < -0.5) {
@@ -215,6 +212,16 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
     }
     return tabs;
   }
+
+  bool _requiresLogin(FeedTabItem item) => switch (item) {
+    FeedTabItem.follow ||
+    FeedTabItem.circle ||
+    FeedTabItem.special ||
+    FeedTabItem.secret ||
+    FeedTabItem.local ||
+    FeedTabItem.group => true,
+    _ => false,
+  };
 
   FeedController _controllerFor(FeedTabSelection selection) {
     final repo = context.read<Repo>();
@@ -284,6 +291,9 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
     });
   }
 
+  ScrollController _scrollFor(String key) =>
+      _scrolls.putIfAbsent(key, ScrollController.new);
+
   void _ensureLoaded(FeedController controller, String key) {
     if (controller.started || controller.loading) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -305,11 +315,12 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
     if (index < 0) index = anchor.index;
     if (index <= 0 && anchor.offset <= 0) return;
     index = index.clamp(0, controller.items.length - 1);
+    final scroll = _scrollFor(key);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       _restoring = true;
       try {
-        await restoreScrollTo(_scroll, index, anchor.offset.toDouble());
+        await restoreScrollTo(scroll, index, anchor.offset.toDouble());
       } finally {
         _restoring = false;
       }
@@ -325,11 +336,12 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
 
   void _saveAnchor() {
     final settings = _settings;
-    if (settings == null || !_scroll.hasClients) return;
     final key = _activeTabKey;
+    final scroll = _scrolls[key];
+    if (settings == null || scroll == null || !scroll.hasClients) return;
     final controller = _controllers[key];
     if (controller == null || controller.items.isEmpty) return;
-    final anchor = firstVisibleAnchor(_scroll, paddingTop: _headerHeight);
+    final anchor = firstVisibleAnchor(scroll, paddingTop: _headerHeight);
     if (anchor == null) return;
     final index = anchor.index;
     if (index < 0 || index >= controller.items.length) return;
@@ -344,17 +356,13 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
 
   void _select(FeedTabSelection selection) {
     if (selection.key == _displayedTabKey) return;
-    final tabs = _tabsFor();
-    final oldIndex = tabs.indexWhere((tab) => tab.key == _displayedTabKey);
-    final newIndex = tabs.indexWhere((tab) => tab.key == selection.key);
-    _switchDirection = newIndex < oldIndex ? -1 : 1;
     _saveTimer?.cancel();
     _saveAnchor();
     final settings = context.read<Settings>();
     settings.applyFeedTab(selection);
     settings.applyFeedTabKey(selection.key);
     context.read<ChromeController>().setHidden(false);
-    setState(() {});
+    setState(() => _mounted.add(selection.key));
   }
 
   @override
@@ -371,100 +379,50 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
     }
     final guest = !repo.hasSession();
     // 纯本地模式没有关注关系，落在「关注」只会看到空态，直接给推荐流。
-    if (guest &&
-        (selected.item == FeedTabItem.follow ||
-            selected.item == FeedTabItem.circle ||
-            selected.item == FeedTabItem.special ||
-            selected.item == FeedTabItem.secret ||
-            selected.item == FeedTabItem.local ||
-            selected.item == FeedTabItem.group)) {
+    if (guest && _requiresLogin(selected.item)) {
       selected = tabs.firstWhere(
         (tab) => tab.item == FeedTabItem.recommend,
         orElse: () => tabs.first,
       );
     }
     _displayedTabKey = selected.key;
-    final controller = _controllerFor(selected);
-    _ensureLoaded(controller, selected.key);
-    _maybeRestore(controller, selected.key);
-    final needsLogin =
-        guest &&
-        (selected.item == FeedTabItem.follow ||
-            selected.item == FeedTabItem.circle ||
-            selected.item == FeedTabItem.special ||
-            selected.item == FeedTabItem.secret ||
-            selected.item == FeedTabItem.local ||
-            selected.item == FeedTabItem.group);
+    _mounted.add(selected.key);
+    _pager.setCount(tabs.length);
+    final selectedIndex = tabs
+        .indexWhere((tab) => tab.key == selected.key)
+        .clamp(0, tabs.length - 1);
+
+    // 只给已挂载的栏目建控制器 / 取数据，滑到跟前才挂。
+    for (final tab in tabs) {
+      if (!_mounted.contains(tab.key)) continue;
+      final controller = _controllerFor(tab);
+      _ensureLoaded(controller, tab.key);
+      _maybeRestore(controller, tab.key);
+    }
 
     final chrome = context.watch<ChromeController>();
     final topPadding = MediaQuery.paddingOf(context).top;
-    // 顶栏与栏目条合成一整块：隐藏时一起滑走，不留遮罩盖在信息流上。
-    const toolbarHeight = 56.0;
-    const tabsHeight = 46.0;
-    final headerHeight = topPadding + toolbarHeight + tabsHeight;
+    // 顶栏与栏目胶囊合成一整块：隐藏时一起滑走，不留遮罩盖在信息流上。
+    final headerHeight = topPadding + _toolbarHeight + _tabsHeight;
     _headerHeight = headerHeight;
     return Surface(
       color: SurfaceLevel.page.colorOf(context.colorScheme),
       child: Stack(
         children: [
           Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onHorizontalDragStart: _handleSwipeStart,
-              onHorizontalDragUpdate: _handleSwipeUpdate,
-              onHorizontalDragEnd: _handleSwipeEnd,
-              child: TweenAnimationBuilder<double>(
-                key: ValueKey('feed-switch-${selected.key}'),
-                tween: Tween(begin: 0, end: 1),
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                builder: (context, value, child) => Opacity(
-                  opacity: value.clamp(0.0, 1.0),
-                  child: Transform.translate(
-                    offset: Offset((1 - value) * 18 * _switchDirection, 0),
-                    child: child,
-                  ),
-                ),
-                child: needsLogin
-                  ? Padding(
-                      padding: EdgeInsets.only(top: headerHeight),
-                      child: HoboEmpty(
-                        title: '登录后可以看关注流',
-                        message: '纯本地模式只能浏览推荐与收藏',
-                        action: TextButton(
-                          onPressed: () => openLogin(context),
-                          child: const Text('去登录'),
-                        ),
-                      ),
-                    )
-                  : StatusList(
-                      key: ValueKey(selected.key),
-                      controller: controller,
-                      scrollController: _scroll,
-                      onScroll: _handleScroll,
-                      dockInset: true,
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        headerHeight + 8,
-                        16,
-                        pageBottomInset(context),
-                      ),
-                      emptyTitle: guest ? '这里还没有内容' : '还没有微博',
-                      emptyMessage: guest ? '登录后内容会更全' : '下拉刷新试试',
-                      onRefresh: () async {
-                        chrome.setHidden(false);
-                        await controller.refresh();
-                      },
-                      onOpenStatus: (status) => openStatus(context, status),
-                      onOpenUser: (user) => openUser(context, user),
-                      onOpenImage: (pics, index) =>
-                          openImages(context, pics: pics, index: index),
-                      onOpenVideo: (video) => openVideo(context, video),
-                      onLink: (url) => handleLink(context, url),
-                      onLongPressStatus: (status) =>
-                          showStatusActions(context, status),
-                    ),
-              ),
+            child: HoboPager(
+              controller: _pager,
+              index: selectedIndex,
+              onIndexChanged: (index) {
+                if (index >= 0 && index < tabs.length) _select(tabs[index]);
+              },
+              onNeedsPage: _mount,
+              children: [
+                for (final tab in tabs)
+                  _mounted.contains(tab.key)
+                      ? _tabPage(tab, headerHeight: headerHeight, guest: guest)
+                      : const SizedBox.shrink(),
+              ],
             ),
           ),
           Positioned(
@@ -482,7 +440,7 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SizedBox(
-                        height: toolbarHeight,
+                        height: _toolbarHeight,
                         child: Row(
                           children: [
                             const SizedBox(width: 16),
@@ -544,10 +502,28 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
                           ],
                         ),
                       ),
-                      _FeedTabs(
-                        tabs: tabs,
-                        selected: selected,
-                        onSelected: _select,
+                      SizedBox(
+                        height: _tabsHeight,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                          child: Center(
+                            child: HoboCapsule<String>(
+                              segments: [
+                                for (final tab in tabs) (tab.key, tab.label),
+                              ],
+                              value: selected.key,
+                              onChanged: (key) => _select(
+                                tabs.firstWhere(
+                                  (tab) => tab.key == key,
+                                  orElse: () => selected,
+                                ),
+                              ),
+                              pageController: _pager,
+                              height: 38,
+                              scrollable: true,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -559,37 +535,51 @@ class _FeedPageState extends State<FeedPage> with WidgetsBindingObserver {
       ),
     );
   }
-}
 
-class _FeedTabs extends StatelessWidget {
-  const _FeedTabs({
-    required this.tabs,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final List<FeedTabSelection> tabs;
-  final FeedTabSelection selected;
-  final ValueChanged<FeedTabSelection> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 46,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-        itemCount: tabs.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final tab = tabs[index];
-          return Chip(
-            label: tab.label,
-            selected: tab.key == selected.key,
-            onPressed: () => onSelected(tab),
-          );
-        },
+  Widget _tabPage(
+    FeedTabSelection tab, {
+    required double headerHeight,
+    required bool guest,
+  }) {
+    final needsLogin = guest && _requiresLogin(tab.item);
+    if (needsLogin) {
+      return Padding(
+        padding: EdgeInsets.only(top: headerHeight),
+        child: HoboEmpty(
+          title: '登录后可以看关注流',
+          message: '纯本地模式只能浏览推荐与收藏',
+          action: TextButton(
+            onPressed: () => openLogin(context),
+            child: const Text('去登录'),
+          ),
+        ),
+      );
+    }
+    return StatusList(
+      key: ValueKey('feed-${tab.key}'),
+      controller: _controllerFor(tab),
+      scrollController: _scrollFor(tab.key),
+      onScroll: _handleScroll,
+      dockInset: true,
+      padding: EdgeInsets.fromLTRB(
+        16,
+        headerHeight + 8,
+        16,
+        pageBottomInset(context),
       ),
+      emptyTitle: guest ? '这里还没有内容' : '还没有微博',
+      emptyMessage: guest ? '登录后内容会更全' : '下拉刷新试试',
+      onRefresh: () async {
+        context.read<ChromeController>().setHidden(false);
+        await _controllerFor(tab).refresh();
+      },
+      onOpenStatus: (status) => openStatus(context, status),
+      onOpenUser: (user) => openUser(context, user),
+      onOpenImage: (pics, index) =>
+          openImages(context, pics: pics, index: index),
+      onOpenVideo: (video) => openVideo(context, video),
+      onLink: (url) => handleLink(context, url),
+      onLongPressStatus: (status) => showStatusActions(context, status),
     );
   }
 }

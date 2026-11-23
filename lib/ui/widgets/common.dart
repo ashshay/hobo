@@ -191,6 +191,7 @@ class HoboAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.actions = const [],
     this.titleTextStyle,
     this.toolbarHeight,
+    this.titleSpacing,
     this.hidden = false,
   });
 
@@ -199,6 +200,9 @@ class HoboAppBar extends StatelessWidget implements PreferredSizeWidget {
   final List<Widget> actions;
   final TextStyle? titleTextStyle;
   final double? toolbarHeight;
+
+  /// 标题与 leading 之间的间距：放搜索框时用它把输入框贴到返回键边上。
+  final double? titleSpacing;
 
   /// 滚动信息流时整条顶栏向上滑走。
   final bool hidden;
@@ -220,6 +224,7 @@ class HoboAppBar extends StatelessWidget implements PreferredSizeWidget {
           actions: actions,
           titleTextStyle: titleTextStyle,
           toolbarHeight: toolbarHeight,
+          titleSpacing: titleSpacing,
           // 不裁掉自己，向上滑出的部分才不会被 ClipRect 截断。
           clipBehavior: Clip.none,
         ),

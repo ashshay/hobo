@@ -7,14 +7,15 @@ import '../../data/models.dart';
 import '../../data/repo.dart';
 import '../../data/store.dart';
 import '../routes.dart';
+import '../widgets/capsule.dart';
 import '../widgets/common.dart';
 import '../widgets/feed_list.dart';
 import '../widgets/glyphs.dart';
 import '../widgets/notice_card.dart';
 import '../widgets/notice_list.dart';
+import '../widgets/pager.dart';
 import '../widgets/refresh.dart';
 import '../widgets/remote_image.dart';
-import '../widgets/swipe_pager.dart';
 
 /// 消息：@我 / 评论 / 赞 / 私信，顶栏胶囊切页，左右滑动也能翻。
 class MessagesPage extends StatefulWidget {
@@ -29,7 +30,8 @@ class _RefreshBus extends ChangeNotifier {
   void bump() => notifyListeners();
 }
 
-class _MessagesPageState extends State<MessagesPage> {
+class _MessagesPageState extends State<MessagesPage>
+    with TickerProviderStateMixin {
   static const _segments = <(int, String)>[
     (0, '@我'),
     (1, '评论'),
@@ -42,14 +44,27 @@ class _MessagesPageState extends State<MessagesPage> {
 
   final _RefreshBus _bus = _RefreshBus();
 
+  /// 胶囊滑块与四个页面共用同一条弹簧：点顶栏、滑页面都是同一套非线性运动。
+  late final HoboPagerController _pager = HoboPagerController(
+    vsync: this,
+    count: _segments.length,
+  );
+
   /// 只挂载点过的栏目：四个列表一起拉没必要。
   final Set<int> _mounted = {0};
   int _tab = 0;
 
   @override
   void dispose() {
+    _pager.dispose();
     _bus.dispose();
     super.dispose();
+  }
+
+  /// 横滑经过哪一栏就先把它挂上，松手落格时内容已经在了。
+  void _mount(int tab) {
+    if (_mounted.contains(tab)) return;
+    setState(() => _mounted.add(tab));
   }
 
   void _select(int tab) {
@@ -72,12 +87,15 @@ class _MessagesPageState extends State<MessagesPage> {
     final repo = context.watch<Repo>();
     return PrismScaffold(
       bar: HoboAppBar(
-        title: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _capsuleWidth),
-          child: SegmentedControl<int>(
-            value: _tab,
-            onChanged: _select,
-            segments: _segments,
+        title: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _capsuleWidth),
+            child: HoboCapsule<int>(
+              value: _tab,
+              onChanged: _select,
+              pageController: _pager,
+              segments: _segments,
+            ),
           ),
         ),
         actions: [
@@ -96,19 +114,17 @@ class _MessagesPageState extends State<MessagesPage> {
                 child: const Text('去登录'),
               ),
             )
-          : SwipePager(
+          : HoboPager(
+              controller: _pager,
               index: _tab,
-              count: _segments.length,
               onIndexChanged: _select,
-              child: IndexedStack(
-                index: _tab,
-                children: [
-                  for (var i = 0; i < _segments.length; i++)
-                    _mounted.contains(i)
-                        ? _pageFor(i)
-                        : const SizedBox.shrink(),
-                ],
-              ),
+              onNeedsPage: _mount,
+              children: [
+                for (var i = 0; i < _segments.length; i++)
+                  _mounted.contains(i)
+                      ? _pageFor(i)
+                      : const SizedBox.shrink(),
+              ],
             ),
     );
   }
@@ -124,10 +140,15 @@ class _AtMeTab extends StatefulWidget {
   State<_AtMeTab> createState() => _AtMeTabState();
 }
 
-class _AtMeTabState extends State<_AtMeTab> {
+class _AtMeTabState extends State<_AtMeTab> with TickerProviderStateMixin {
   final Set<int> _mounted = {0};
   int _sub = 0;
   FeedController? _statuses;
+
+  late final HoboPagerController _pager = HoboPagerController(
+    vsync: this,
+    count: 2,
+  );
 
   @override
   void initState() {
@@ -141,8 +162,15 @@ class _AtMeTabState extends State<_AtMeTab> {
   @override
   void dispose() {
     widget.reload.removeListener(_onReload);
+    _pager.dispose();
     _statuses?.dispose();
     super.dispose();
+  }
+
+  /// 横滑经过哪一格就先挂上哪一格，松手落格时内容已经在了。
+  void _mount(int index) {
+    if (_mounted.contains(index)) return;
+    setState(() => _mounted.add(index));
   }
 
   void _onReload() => _statuses?.refresh();
@@ -180,16 +208,20 @@ class _AtMeTabState extends State<_AtMeTab> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: SizedBox(
             width: 140,
-            child: SegmentedControl<int>(
+            child: HoboCapsule<int>(
               value: _sub,
               onChanged: _selectSub,
+              pageController: _pager,
               segments: const [(0, '微博'), (1, '评论')],
             ),
           ),
         ),
         Expanded(
-          child: IndexedStack(
+          child: HoboPager(
+            controller: _pager,
             index: _sub,
+            onIndexChanged: _selectSub,
+            onNeedsPage: _mount,
             children: [
               _statusTab(listPadding),
               _mounted.contains(1)
