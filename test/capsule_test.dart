@@ -127,5 +127,37 @@ void main() {
       expect(host.changes, [1]);
       expect(host.controller.page, 1);
     });
+
+    testWidgets('滚动模式超过可视宽度时首帧不抛空指针异常', (tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(360, 600)),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: Center(
+              child: SizedBox(
+                width: 300,
+                height: 44,
+                child: HoboCapsule<int>(
+                  segments: const [
+                    (0, '最新评论'),
+                    (1, '最新发帖'),
+                    (2, '热门'),
+                    (3, '精华'),
+                    (4, '视频'),
+                    (5, '相册'),
+                  ],
+                  value: 0,
+                  scrollable: true,
+                  onChanged: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
   });
 }

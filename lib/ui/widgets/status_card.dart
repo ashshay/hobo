@@ -223,11 +223,12 @@ class _Header extends StatelessWidget {
                         user?.name ?? '微博',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyle.subheadline.of(context).copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: context.colorScheme.onSurface,
-                        ),
+                        style: AppTextStyle.subheadline
+                            .of(context, emphasized: true)
+                            .copyWith(
+                              fontSize: 15,
+                              color: context.colorScheme.onSurface,
+                            ),
                       ),
                     ),
                     if (user?.verified == true) ...[

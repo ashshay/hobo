@@ -14,6 +14,7 @@ import 'pages/chat_page.dart' as chat;
 import 'pages/compose_page.dart';
 import 'pages/detail_page.dart';
 import 'pages/edit_history_page.dart';
+import 'pages/font_settings_page.dart';
 import 'pages/image_viewer_page.dart';
 import 'pages/library_pages.dart';
 import 'pages/login_page.dart';
@@ -24,6 +25,7 @@ import 'pages/relations_page.dart';
 import 'pages/replies_page.dart';
 import 'pages/search_page.dart';
 import 'pages/settings_page.dart';
+import 'pages/super_topic_hub_page.dart';
 import 'pages/super_topic_page.dart';
 import 'pages/video_page.dart';
 import 'pages/vote_page.dart';
@@ -81,9 +83,13 @@ void openTopic(BuildContext context, String query) {
   pushPage(context, TopicPage(query: query));
 }
 
-void openSuperTopic(BuildContext context, String containerId) {
+Future<void> openSuperTopic(BuildContext context, String containerId) {
   final id = normalizedSuperTopicId(containerId) ?? containerId;
-  pushPage(context, SuperTopicScreen(containerId: id));
+  return pushPage(context, SuperTopicScreen(containerId: id));
+}
+
+void openSuperTopicHub(BuildContext context) {
+  pushPage(context, const SuperTopicHubPage());
 }
 
 void openVote(BuildContext context, String voteId, {Status? status}) {
@@ -111,6 +117,10 @@ Future<bool?> openCompose(BuildContext context, {String initialText = ''}) {
 
 void openSettings(BuildContext context) {
   pushPage(context, SettingsPage());
+}
+
+void openFontSettings(BuildContext context) {
+  pushPage(context, const FontSettingsPage());
 }
 
 void openAccounts(BuildContext context) {

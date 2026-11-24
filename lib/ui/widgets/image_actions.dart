@@ -10,7 +10,7 @@ import '../nav.dart';
 import '../pages/image_viewer_page.dart';
 import 'common.dart';
 
-/// 卡片上长按缩略图：看原图 / 存到相册 / 复制链接。
+/// 卡片上长按缩略图：看原图 / 存到相册（实况图支持保存实况图、静图或视频）/ 复制链接。
 ///
 /// 单放在这里而不是 `routes.dart`，是因为信息流、评论、卡片都要用，
 /// 而 `routes.dart` 已经反向依赖了这些 widget。
@@ -24,12 +24,20 @@ Future<void> showImageActions(
   final pic = pics[safe];
   final url = pic.large.isNotEmpty ? pic.large : pic.thumb;
   if (url.isEmpty) return;
+  final title = pics.length > 1
+      ? '${pic.isLive ? '实况图' : '图片'} ${safe + 1}/${pics.length}'
+      : (pic.isLive ? '实况图' : '图片');
   await showHoboActionSheet(
     context,
-    title: pics.length > 1 ? '图片 ${safe + 1}/${pics.length}' : '图片',
+    title: title,
     actions: [
       ('查看原图', () => openImageViewer(context, pics, safe)),
-      ('保存图片', () => saveImageToGallery(context, url)),
+      if (pic.isLive) ...[
+        ('保存实况图', () => saveLivePhotoToGallery(context, pic)),
+        ('仅保存静图', () => saveImageToGallery(context, url)),
+        ('保存实况视频', () => saveLiveVideoToGallery(context, pic.live)),
+      ] else
+        ('保存图片', () => saveImageToGallery(context, url)),
       ('复制图片链接', () => copyImageLink(context, url)),
     ],
   );
@@ -59,6 +67,46 @@ Future<void> saveImageToGallery(BuildContext context, String url) async {
   } on Object catch (e) {
     if (messenger.mounted) {
       showHoboToast(messenger, '保存失败：$e', level: BannerLevel.error);
+    }
+  }
+}
+
+/// 下载静图与实况短视频，封装为 Android Motion Photo 写入系统相册。
+Future<void> saveLivePhotoToGallery(BuildContext context, Pic pic) async {
+  final imageUrl = pic.large.isNotEmpty ? pic.large : pic.thumb;
+  if (imageUrl.isEmpty || !pic.isLive) return;
+  final repo = context.read<Repo>();
+  final messenger = context;
+  showHoboToast(context, '正在保存实况图…');
+  try {
+    await MediaSaver.saveLivePhoto(
+      imageUrl: imageUrl,
+      liveUrl: pic.live,
+      cookie: repo.cookie(),
+    );
+    if (messenger.mounted) showHoboToast(messenger, '已保存实况图到相册');
+  } on Object catch (e) {
+    if (messenger.mounted) {
+      showHoboToast(messenger, '保存实况图失败：$e', level: BannerLevel.error);
+    }
+  }
+}
+
+/// 仅将实况短视频转封装为 MP4 并写入系统相册。
+Future<void> saveLiveVideoToGallery(
+  BuildContext context,
+  String liveUrl,
+) async {
+  if (liveUrl.isEmpty) return;
+  final repo = context.read<Repo>();
+  final messenger = context;
+  showHoboToast(context, '正在保存实况视频…');
+  try {
+    await MediaSaver.saveLiveVideo(liveUrl, cookie: repo.cookie());
+    if (messenger.mounted) showHoboToast(messenger, '已保存实况视频到相册');
+  } on Object catch (e) {
+    if (messenger.mounted) {
+      showHoboToast(messenger, '保存实况视频失败：$e', level: BannerLevel.error);
     }
   }
 }

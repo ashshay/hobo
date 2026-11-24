@@ -70,6 +70,57 @@ class SuperTopicPage {
   final List<SuperTopicTab> tabs;
 }
 
+/// 超话列表项：用于「我的超话」「超话广场」「最近访问」。
+class SuperTopicSummary {
+  const SuperTopicSummary({
+    required this.containerId,
+    required this.title,
+    this.avatar = '',
+    this.desc1 = '',
+    this.desc2 = '',
+    this.scheme = '',
+  });
+
+  final String containerId;
+  final String title;
+  final String avatar;
+  final String desc1;
+  final String desc2;
+  final String scheme;
+
+  Map<String, dynamic> toJson() => {
+    'containerId': containerId,
+    'title': title,
+    'avatar': avatar,
+    'desc1': desc1,
+    'desc2': desc2,
+    'scheme': scheme,
+  };
+
+  static SuperTopicSummary? fromJson(Map<String, dynamic>? o) {
+    if (o == null) return null;
+    final id = normalizedSuperTopicId(o.str('containerId'));
+    final title = o.str('title').trim();
+    if (id == null || title.isEmpty) return null;
+    return SuperTopicSummary(
+      containerId: id,
+      title: title,
+      avatar: o.str('avatar'),
+      desc1: o.str('desc1'),
+      desc2: o.str('desc2'),
+      scheme: o.str('scheme'),
+    );
+  }
+}
+
+/// 超话列表的一页。
+class SuperTopicListPage {
+  const SuperTopicListPage({required this.items, this.nextCursor});
+
+  final List<SuperTopicSummary> items;
+  final String? nextCursor;
+}
+
 final _superTopicCount = RegExp(
   r'(阅读|帖子|粉丝)([0-9]+(?:\.[0-9]+)?[万亿千]?\+?)(?=阅读|帖子|粉丝|$)',
 );
@@ -372,6 +423,156 @@ Status? _videoStatus(Map<String, dynamic>? item) {
   );
 }
 
+/// 解析「我关注的超话」或「超话广场」返回：
+/// 兼容 `m.weibo.cn/api/container/getIndex`（`data.cards` / `card_group`）
+/// 与 `weibo.com/ajax/profile/topicContent`（`data.list`）。
+SuperTopicListPage parseSuperTopicList(
+  Map<String, dynamic>? root, {
+  int currentPage = 1,
+}) {
+  if (root == null) return const SuperTopicListPage(items: []);
+  if (root.intOf('ok', 1) == -100) {
+    throw ApiException('超话需要登录后查看', '-100');
+  }
+  final data = root.obj('data') ?? root;
+  final topics = <String, SuperTopicSummary>{};
+
+  // 格式 B：weibo.com/ajax/profile/topicContent?tabid=231093_-_chaohua
+  final list = data.arr('list');
+  if (list != null) {
+    for (final entry in list) {
+      final o = jObj(entry);
+      if (o == null) continue;
+      final cid =
+          superTopicId(o.str('oid')) ??
+          superTopicId(o.str('containerid')) ??
+          superTopicId(o.str('link')) ??
+          superTopicId(o.str('scheme'));
+      final title = _cleanTopicTitle(_firstNonEmpty([
+        o.str('title'),
+        o.str('title_sub'),
+        o.str('topic_name'),
+      ]));
+      if (cid == null || title.isEmpty) continue;
+      topics.putIfAbsent(
+        cid,
+        () => SuperTopicSummary(
+          containerId: cid,
+          title: title,
+          avatar: _normalizePicUrl(_firstNonEmpty([
+            o.str('pic'),
+            o.str('portrait_hd'),
+            o.str('portrait'),
+            o.str('icon'),
+          ])),
+          desc1: stripHtml(_firstNonEmpty([
+            o.str('content1'),
+            o.str('desc1'),
+            o.str('desc'),
+          ])).trim(),
+          desc2: stripHtml(_firstNonEmpty([
+            o.str('content2'),
+            o.str('desc2'),
+            o.str('sub_title'),
+          ])).trim(),
+          scheme: _firstNonEmpty([o.str('link'), o.str('scheme')]),
+        ),
+      );
+    }
+    final maxPage = data.intOf('max_page');
+    final hasMore = maxPage > 0
+        ? currentPage < maxPage
+        : topics.isNotEmpty && data.str('next_cursor').isNotEmpty;
+    return SuperTopicListPage(
+      items: topics.values.toList(),
+      nextCursor: hasMore ? 'page:${currentPage + 1}' : null,
+    );
+  }
+
+  // 格式 A：m.weibo.cn/api/container/getIndex?containerid=100803...
+  _collectSuperTopicListCards(data.arr('cards'), topics);
+  final info = data.obj('cardlistInfo') ?? data.obj('pageInfo');
+  final rawSince = info?.str('since_id').trim() ?? '';
+  String? nextCursor;
+  if (topics.isNotEmpty &&
+      rawSince.isNotEmpty &&
+      rawSince.toLowerCase() != 'null' &&
+      !rawSince.split('').every((c) => c == '0')) {
+    nextCursor = rawSince;
+  } else {
+    final nextPage = info?.intOf('page') ?? 0;
+    if (topics.isNotEmpty && nextPage > currentPage) {
+      nextCursor = 'page:$nextPage';
+    }
+  }
+  return SuperTopicListPage(
+    items: topics.values.toList(),
+    nextCursor: nextCursor,
+  );
+}
+
+void _collectSuperTopicListCards(
+  List<dynamic>? cards,
+  Map<String, SuperTopicSummary> topics,
+) {
+  if (cards == null) return;
+  for (final card in cards) {
+    final o = jObj(card);
+    if (o == null || o.has('mblog')) continue;
+    final scheme = o.str('scheme');
+    final cid =
+        superTopicId(o.str('containerid')) ??
+        superTopicId(scheme) ??
+        superTopicId(o.str('oid'));
+    final title = _cleanTopicTitle(_firstNonEmpty([
+      o.str('title_sub'),
+      o.str('title'),
+      o.str('item_title'),
+      o.str('topic_name'),
+    ]));
+    if (cid != null && title.isNotEmpty) {
+      topics.putIfAbsent(
+        cid,
+        () => SuperTopicSummary(
+          containerId: cid,
+          title: title,
+          avatar: _normalizePicUrl(_firstNonEmpty([
+            o.str('pic'),
+            o.str('icon'),
+            o.str('portrait_hd'),
+            o.str('portrait'),
+          ])),
+          desc1: stripHtml(_firstNonEmpty([
+            o.str('desc1'),
+            o.str('desc'),
+            o.str('item_desc'),
+            o.str('content1'),
+          ])).trim(),
+          desc2: stripHtml(_firstNonEmpty([
+            o.str('desc2'),
+            o.str('content2'),
+          ])).trim(),
+          scheme: scheme,
+        ),
+      );
+    }
+    _collectSuperTopicListCards(o.arr('card_group'), topics);
+    _collectSuperTopicListCards(o.arr('group'), topics);
+    _collectSuperTopicListCards(o.arr('items'), topics);
+  }
+}
+
+String _cleanTopicTitle(String raw) => stripHtml(raw)
+    .replaceAll(RegExp(r'^#+|#+$'), '')
+    .replaceAll('\u00a0', ' ')
+    .trim();
+
+String _normalizePicUrl(String raw) {
+  final value = raw.trim();
+  if (value.startsWith('//')) return 'https:$value';
+  return value;
+}
+
 /// 综合搜索里也可能夹着原生超话卡。
 List<TopicItem> parseSuperTopicSearch(Map<String, dynamic>? root) {
   if (root == null) return const [];
@@ -393,10 +594,7 @@ void _collectSuperTopicSearchCards(
     final scheme = o.str('scheme');
     final containerId =
         superTopicId(o.str('containerid')) ?? superTopicId(scheme);
-    String titleOf(String key) => stripHtml(o.str(key))
-        .replaceAll(RegExp(r'^#+|#+$'), '')
-        .replaceAll('\u00a0', ' ')
-        .trim();
+    String titleOf(String key) => _cleanTopicTitle(o.str(key));
     var title = titleOf('title_sub');
     if (title.isEmpty) title = titleOf('title');
     if (title.isEmpty) title = titleOf('item_title');
@@ -409,6 +607,10 @@ void _collectSuperTopicSearchCards(
           desc2: o.str('desc2'),
           scheme: scheme,
           containerId: containerId,
+          avatar: _normalizePicUrl(_firstNonEmpty([
+            o.str('pic'),
+            o.str('icon'),
+          ])),
         ),
       );
     }

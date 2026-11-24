@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../data/repo.dart';
 import '../data/settings.dart';
+import '../data/update.dart';
 import 'chrome.dart';
 import 'pages/feed_page.dart';
 import 'pages/messages_page.dart';
@@ -18,6 +19,7 @@ import 'routes.dart';
 import 'widgets/common.dart';
 import 'widgets/glyphs.dart';
 import 'widgets/remote_image.dart';
+import 'widgets/update_dialog.dart';
 
 /// 应用外壳：四栏页面 + 居中的四格底栏。
 class HoboShell extends StatefulWidget {
@@ -33,6 +35,44 @@ class _HoboShellState extends State<HoboShell> {
   DateTime? _lastHomeTapAt;
   Timer? _longPressTimer;
   Offset? _pressStart;
+  bool _autoUpdateTriggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_checkAutoUpdate());
+    });
+  }
+
+  /// 冷启动后在首页静默检测一次更新；有新版本且未勾选「不再提醒」时弹出更新窗口。
+  Future<void> _checkAutoUpdate() async {
+    if (_autoUpdateTriggered || !mounted) return;
+    _autoUpdateTriggered = true;
+    final settings = context.read<Settings>();
+    if (!settings.autoCheckUpdate) return;
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    final result = await Updater.checkForUpdate(settings: settings);
+    if (!mounted || !result.shouldPrompt) return;
+    // 只在首页本身处于前台顶层时弹窗，避免盖住登录页、看图页或视频页。
+    if (_index != 0) return;
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    final info = result.update!;
+    final action = await showUpdateDialog(
+      context,
+      info,
+      currentVersion: result.currentVersion,
+      showDontRemind: true,
+    );
+    if (!mounted) return;
+    if (action.dontRemind) {
+      settings.applySkippedUpdate(info.version);
+    }
+    if (action.update) {
+      await openReleasePage(context, info);
+    }
+  }
 
   void _onDockSelected(int index) {
     // 换页时顶栏底栏都回来，不然藏在底部就没法再切回去。

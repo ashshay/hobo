@@ -357,9 +357,8 @@ class _ChatPageState extends State<ChatPage> {
                 maxLines: 5,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _sendText(),
-                decoration: const InputDecoration(
+                decoration: const InputDecoration.collapsed(
                   hintText: '发消息…',
-                  isCollapsed: true,
                 ),
               ),
             ),

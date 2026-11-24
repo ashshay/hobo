@@ -166,9 +166,8 @@ class _ComposePageState extends State<ComposePage> {
                     autofocus: true,
                     minLines: 6,
                     maxLines: 20,
-                    decoration: const InputDecoration(
+                    decoration: const InputDecoration.collapsed(
                       hintText: '分享新鲜事…',
-                      isCollapsed: true,
                     ),
                     style: AppTextStyle.body.of(context).copyWith(
                       fontSize: 16,

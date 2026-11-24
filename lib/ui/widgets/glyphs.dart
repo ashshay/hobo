@@ -234,4 +234,49 @@ abstract final class HoboGlyphs {
   static const list = Glyph([
     GlyphPath('M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z'),
   ]);
+
+  /// 超话：微博官方双环螺旋钻石轮廓。
+  static const superTopic = Glyph([
+    GlyphPath(
+      'M12 15.1L6.7 9.8L8.3 7.5L15.7 7.5L17.3 9.8L9.8 17.3L2.5 9.8L6.4 4.3L17.6 4.3L21.5 9.8L12 19.7',
+      role: GlyphRole.line,
+    ),
+  ]);
+
+  /// 实况图：外圈点环 + 同心圆环 + 实心中心点。
+  static const livePhoto = Glyph([
+    GlyphCircle(12, 12, 2.3, solid: true),
+    GlyphCircle(12, 12, 5.4, role: GlyphRole.line),
+    GlyphCircle(12.0, 2.8, 0.95, solid: true),
+    GlyphCircle(16.6, 4.03, 0.95, solid: true),
+    GlyphCircle(19.97, 7.4, 0.95, solid: true),
+    GlyphCircle(21.2, 12.0, 0.95, solid: true),
+    GlyphCircle(19.97, 16.6, 0.95, solid: true),
+    GlyphCircle(16.6, 19.97, 0.95, solid: true),
+    GlyphCircle(12.0, 21.2, 0.95, solid: true),
+    GlyphCircle(7.4, 19.97, 0.95, solid: true),
+    GlyphCircle(4.03, 16.6, 0.95, solid: true),
+    GlyphCircle(2.8, 12.0, 0.95, solid: true),
+    GlyphCircle(4.03, 7.4, 0.95, solid: true),
+    GlyphCircle(7.4, 4.03, 0.95, solid: true),
+  ]);
+
+  /// 开启声音。
+  static const volumeOn = Glyph([
+    GlyphPath(
+      'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z',
+    ),
+  ]);
+
+  /// 静音。
+  static const volumeOff = Glyph([
+    GlyphPath(
+      'M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z',
+    ),
+  ]);
+
+  /// 快进 / 倍速。
+  static const fastForward = Glyph([
+    GlyphPath('M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z'),
+  ]);
 }

@@ -111,8 +111,11 @@ class _HoboAppState extends State<HoboApp> {
       tintCards: widget.settings.monetCards && monet != null,
       exactAccent: configured == 0 ? monet : null,
     );
+    // 字号与字重由 PrismApp 的独立作用域驱动，不放进 ThemeData 缓存键，
+    // 避免调节滑块时触发全屏 ThemeCrossFade 截屏过渡。
     final key =
-        '${brightness.name}-${scheme.colorScheme.primary.toARGB32()}-${widget.settings.fontScale}';
+        '${brightness.name}-${scheme.colorScheme.primary.toARGB32()}-${widget.settings.monetCards}';
+    if (_themes.length > 16) _themes.clear();
     return _themes.putIfAbsent(key, () => scheme);
   }
 
@@ -142,8 +145,9 @@ class _HoboAppState extends State<HoboApp> {
             darkTheme: _themeFor(Brightness.dark),
             themeMode: themeMode,
             textScale: settings.fontScale,
-            minTextScale: 0.85,
-            maxTextScale: 1.3,
+            minTextScale: fontScaleMin,
+            maxTextScale: fontScaleMax,
+            fontWeightDelta: settings.fontWeightDelta,
             // 「模糊效果」是总开关：关掉时顶栏退回实色，底栏也不走玻璃 shader。
             // 液态玻璃固定标准档，不再让用户分级。
             liquidGlass: settings.blurEffects

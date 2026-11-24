@@ -273,11 +273,8 @@ class HoboPage extends StatelessWidget {
         titleTextStyle:
             titleTextStyle ??
             AppTextStyle.title3
-                .of(context)
-                .copyWith(
-                  color: context.colorScheme.onSurface,
-                  fontWeight: FontWeight.w600,
-                ),
+                .of(context, emphasized: true)
+                .copyWith(color: context.colorScheme.onSurface),
         actions: actions,
         hidden: hidden,
       ),
@@ -322,11 +319,8 @@ class HoboBarAction extends StatelessWidget {
       child: Text(
         label,
         style: AppTextStyle.footnote
-            .of(context)
-            .copyWith(
-              color: context.colorScheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
+            .of(context, emphasized: true)
+            .copyWith(color: context.colorScheme.primary),
       ),
     );
   }

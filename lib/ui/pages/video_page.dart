@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:prism_ui/icons/icons.dart';
 import 'package:prism_ui/prism_ui.dart';
@@ -11,6 +14,17 @@ import '../../data/settings.dart';
 import '../routes.dart';
 import '../widgets/common.dart';
 import '../widgets/glyphs.dart';
+
+/// 长按倍速的目标倍率：常规档按住加速到 2.0x，已设为 2.0x 时进一步加速到 3.0x。
+double longPressBoostRate(VideoSpeed base) => base.rate < 2.0 ? 2.0 : 3.0;
+
+/// 格式化播放倍速文案（例如 `2.0x`、`3.0x`）。
+String formatPlaybackRate(double rate) {
+  if ((rate - rate.roundToDouble()).abs() < 0.01) {
+    return '${rate.toStringAsFixed(1)}x';
+  }
+  return '${rate}x';
+}
 
 /// 视频播放。微博 CDN 只认带 Referer 的请求，所以给播放器带上请求头；
 /// 如果拿到的不是直链（视频页 / 第三方站点），退回内置浏览器。
@@ -29,6 +43,9 @@ class _VideoPageState extends State<VideoPage> {
   String? _error;
   late VideoQuality? _quality = widget.video.current;
   late VideoSpeed _speed = VideoSpeed.normal;
+
+  /// 长按临时倍速；松手或取消时清零并恢复到 [_speed]。
+  double? _boostRate;
   bool _saving = false;
   double _saveProgress = 0;
 
@@ -86,6 +103,7 @@ class _VideoPageState extends State<VideoPage> {
       final previous = _controller;
       setState(() {
         _controller = controller;
+        _boostRate = null;
         _loading = false;
         _error = null;
       });
@@ -117,6 +135,7 @@ class _VideoPageState extends State<VideoPage> {
   void _toggle() {
     final controller = _controller;
     if (controller == null) return;
+    _endLongPressSpeed();
     setState(() {
       if (controller.value.isPlaying) {
         controller.pause();
@@ -124,6 +143,25 @@ class _VideoPageState extends State<VideoPage> {
         controller.play();
       }
     });
+  }
+
+  void _startLongPressSpeed() {
+    final controller = _controller;
+    if (controller == null || _loading) return;
+    if (!controller.value.isInitialized || !controller.value.isPlaying) return;
+    final target = longPressBoostRate(_speed);
+    HapticFeedback.lightImpact();
+    setState(() => _boostRate = target);
+    unawaited(controller.setPlaybackSpeed(target));
+  }
+
+  void _endLongPressSpeed() {
+    if (_boostRate == null) return;
+    setState(() => _boostRate = null);
+    final controller = _controller;
+    if (controller != null && controller.value.isInitialized) {
+      unawaited(controller.setPlaybackSpeed(_speed.rate));
+    }
   }
 
   Future<void> _pickQuality() async {
@@ -262,7 +300,7 @@ class _VideoPageState extends State<VideoPage> {
                       ),
                     ),
                   IconButton(
-                    onPressed: _saving ? null : _save,
+                    onPressed: _save,
                     tooltip: '保存视频',
                     icon: _saving
                         ? const ActivityIndicator(
@@ -292,6 +330,17 @@ class _VideoPageState extends State<VideoPage> {
               ),
             ),
           ),
+          if (_boostRate != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: MediaQuery.paddingOf(context).top + 58,
+              child: IgnorePointer(
+                child: Center(
+                  child: _BoostSpeedBadge(rate: _boostRate!),
+                ),
+              ),
+            ),
           if (_controller != null)
             Positioned(
               left: 0,
@@ -300,6 +349,7 @@ class _VideoPageState extends State<VideoPage> {
               child: _Controls(
                 controller: _controller!,
                 speed: _speed,
+                boostRate: _boostRate,
                 onPickSpeed: _pickSpeed,
                 onToggle: _toggle,
               ),
@@ -344,9 +394,13 @@ class _VideoPageState extends State<VideoPage> {
         ),
       );
     }
-    return Center(
-      child: GestureDetector(
-        onTap: _toggle,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggle,
+      onLongPressStart: (_) => _startLongPressSpeed(),
+      onLongPressEnd: (_) => _endLongPressSpeed(),
+      onLongPressCancel: _endLongPressSpeed,
+      child: Center(
         child: AspectRatio(
           aspectRatio: controller.value.aspectRatio == 0
               ? 16 / 9
@@ -377,6 +431,42 @@ class _VideoPageState extends State<VideoPage> {
   }
 }
 
+class _BoostSpeedBadge extends StatelessWidget {
+  const _BoostSpeedBadge({required this.rate});
+
+  final double rate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: const ShapeDecoration(
+        color: Color(0xB3000000),
+        shape: AppShape.full,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const GlyphIcon(
+            HoboGlyphs.fastForward,
+            size: 16,
+            color: Color(0xFFFFFFFF),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '${formatPlaybackRate(rate)} 倍速播放中',
+            style: AppTextStyle.caption1.of(context).copyWith(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFFFFFFFF),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PlayOverlay extends StatelessWidget {
   const _PlayOverlay();
 
@@ -402,12 +492,14 @@ class _Controls extends StatelessWidget {
   const _Controls({
     required this.controller,
     required this.speed,
+    this.boostRate,
     required this.onPickSpeed,
     required this.onToggle,
   });
 
   final VideoPlayerController controller;
   final VideoSpeed speed;
+  final double? boostRate;
   final VoidCallback onPickSpeed;
   final VoidCallback onToggle;
 
@@ -506,12 +598,16 @@ class _Controls extends StatelessWidget {
                     vertical: 4,
                   ),
                   alignment: Alignment.center,
-                  decoration: const ShapeDecoration(
-                    color: Color(0x33FFFFFF),
+                  decoration: ShapeDecoration(
+                    color: boostRate != null
+                        ? context.colorScheme.primary.withValues(alpha: 0.85)
+                        : const Color(0x33FFFFFF),
                     shape: AppShape.full,
                   ),
                   child: Text(
-                    speed.label,
+                    boostRate != null
+                        ? formatPlaybackRate(boostRate!)
+                        : speed.label,
                     style: AppTextStyle.caption1.of(context).copyWith(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,

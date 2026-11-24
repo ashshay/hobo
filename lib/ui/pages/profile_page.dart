@@ -7,6 +7,7 @@ import '../../data/models.dart';
 import '../../data/repo.dart';
 import '../chrome.dart';
 import '../routes.dart';
+import '../theme.dart' show formatCount;
 import '../widgets/common.dart';
 import '../widgets/feed_list.dart';
 import '../widgets/glyphs.dart';
@@ -366,18 +367,18 @@ class _StatsRow extends StatelessWidget {
     return Row(
       children: [
         _Stat(
-          value: '${user.friends}',
+          value: formatCount(user.friends),
           label: '关注',
           onTap: () => onOpenRelations(RelationKind.following),
         ),
         const SizedBox(width: 22),
         _Stat(
-          value: '${user.followers}',
+          value: formatCount(user.followers),
           label: '粉丝',
           onTap: () => onOpenRelations(RelationKind.followers),
         ),
         const SizedBox(width: 22),
-        _Stat(value: '${user.statuses}', label: '微博'),
+        _Stat(value: formatCount(user.statuses), label: '微博'),
         const Spacer(),
         if (!isSelf) _FollowButton(following: following, onPressed: onFollow),
       ],
@@ -442,7 +443,7 @@ class _Stat extends StatelessWidget {
                 .of(context)
                 .copyWith(
                   fontSize: 15,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeightScope.resolve(context, FontWeight.w700),
                   color: context.colorScheme.onSurface,
                 ),
           ),

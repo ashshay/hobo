@@ -123,7 +123,9 @@ String formatCount(int value) {
 }
 
 String _trim(double value) {
-  final text = value >= 100 ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
+  final text = value >= 1000
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(1);
   return text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
 }
 

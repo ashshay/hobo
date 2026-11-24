@@ -192,26 +192,35 @@ class Pic {
 }
 
 /// 实况视频地址：m.weibo.cn 放在 videoSrc，weibo.com 的 pic_infos 放在 video。
+/// GIF 也会带 video 字段（mp4），必须按 type=gif 排除，别把 GIF 误判成实况图。
 String liveVideoUrl(Map<String, dynamic> pic) {
-  if (pic.str('type').toLowerCase() != 'livephoto') return '';
+  final type = pic.str('type').toLowerCase();
+  if (type == 'gif') return '';
   final raw = firstNonEmpty([
     pic.str('videoSrc'),
     pic.str('video'),
     pic.str('video_hd'),
   ]);
-  return livePlayUrl(raw);
+  if (raw.isEmpty) return '';
+  if (type == 'livephoto' ||
+      type == 'live_photo' ||
+      raw.contains('livephoto')) {
+    return livePlayUrl(raw);
+  }
+  return '';
 }
 
 /// 裸 mov 直接请求 403，要先走 video.weibo.com 的播放页拿签名地址。已签名的原样返回。
 String livePlayUrl(String raw) {
-  if (raw.isEmpty) return '';
-  if (raw.contains('livephoto=') ||
-      raw.contains('Expires=') ||
-      raw.contains('ssig=')) {
-    return raw;
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return '';
+  final absolute = trimmed.startsWith('//') ? 'https:$trimmed' : trimmed;
+  if (absolute.contains('livephoto=') ||
+      absolute.contains('Expires=') ||
+      absolute.contains('ssig=')) {
+    return absolute;
   }
-  final absolute = raw.startsWith('//') ? 'https:$raw' : raw;
-  final path = absolute.split('?').first;
+  final path = absolute.split('?').first.toLowerCase();
   if (!absolute.contains('sinaimg.cn') || !path.endsWith('.mov')) {
     return absolute;
   }
@@ -289,6 +298,8 @@ bool _isPlaceholderPic(Map<String, dynamic> p) {
   final url = firstNonEmpty([
     p.str('url'),
     p.obj('large')?.str('url') ?? '',
+    p.obj('largest')?.str('url') ?? '',
+    p.obj('original')?.str('url') ?? '',
   ]);
   if (url.isEmpty) return true;
   final path = Uri.tryParse(url)?.path ?? url;
@@ -300,8 +311,13 @@ bool _isPlaceholderPic(Map<String, dynamic> p) {
 
 Pic? _picOf(Map<String, dynamic>? p) {
   if (p == null) return null;
-  final large = p.obj('large') ?? p.obj('largest');
-  final url = firstNonEmpty([p.str('url'), large?.str('url') ?? '']);
+  final large = p.obj('large') ?? p.obj('largest') ?? p.obj('original');
+  final thumbObj = p.obj('bmiddle') ?? p.obj('thumbnail');
+  final url = firstNonEmpty([
+    p.str('url'),
+    thumbObj?.str('url') ?? '',
+    large?.str('url') ?? '',
+  ]);
   if (url.isEmpty && large == null) return null;
   final geo = large?.obj('geo') ?? p.obj('geo');
   return Pic(
@@ -1159,6 +1175,7 @@ class TopicItem {
     this.desc2 = '',
     this.scheme = '',
     this.containerId,
+    this.avatar = '',
   });
 
   final String title;
@@ -1166,6 +1183,7 @@ class TopicItem {
   final String desc2;
   final String scheme;
   final String? containerId;
+  final String avatar;
 }
 
 /// 消息中心「收到的赞」的一条：谁赞了你的哪条微博。

@@ -132,6 +132,44 @@ enum AppIconShape {
 /// `0` 表示跟随 prism 默认蓝；[accentHueCycle] 表示色相缓慢循环。
 const accentHueCycle = 1;
 
+/// 全局字号缩放范围与步进：85%–130%，每档 5%（共 9 段 / 10 档）。
+const double fontScaleMin = 0.85;
+const double fontScaleMax = 1.30;
+const int fontScaleDivisions = 9;
+
+/// 全局字体粗细偏移档位：-1（较细）~ +3（粗体），0 为默认标准粗细。
+const int fontWeightDeltaMin = -1;
+const int fontWeightDeltaMax = 3;
+
+/// 将字号缩放夹在合法区间内并去掉浮点尾差（如 1.1500000000000001）。
+double normalizeFontScale(double value) {
+  final clamped = value.clamp(fontScaleMin, fontScaleMax).toDouble();
+  return (clamped * 100).round() / 100;
+}
+
+/// 将字体粗细偏移夹在合法档位内。
+int normalizeFontWeightDelta(int value) =>
+    value.clamp(fontWeightDeltaMin, fontWeightDeltaMax);
+
+/// 字号挡位的易读描述。
+String fontScaleLabel(double scale) {
+  final pct = (normalizeFontScale(scale) * 100).round();
+  if (pct <= 88) return '$pct% · 紧凑';
+  if (pct <= 96) return '$pct% · 偏小';
+  if (pct <= 104) return '$pct% · 标准';
+  if (pct <= 116) return '$pct% · 偏大';
+  return '$pct% · 特大';
+}
+
+/// 字体粗细档位标签（对应基准正文 W300–W700）。
+String fontWeightLabel(int delta) => switch (normalizeFontWeightDelta(delta)) {
+  -1 => '较细',
+  0 => '标准',
+  1 => '适中',
+  2 => '偏粗',
+  _ => '粗体',
+};
+
 const accentPresets = <AccentPreset>[
   AccentPreset('跟随壁纸', 0),
   AccentPreset('微博橙', 0xFFFF8200),
@@ -157,6 +195,7 @@ class Settings extends ChangeNotifier {
   List<String> _searchHistory = const [];
   int _darkMode = 0;
   double _fontScale = 1;
+  int _fontWeightDelta = 0;
   int _accentColor = 0;
   int _mainTab = 0;
   FeedTabSelection _feedTab = const FeedTabSelection(FeedTabItem.follow);
@@ -182,6 +221,9 @@ class Settings extends ChangeNotifier {
   Set<HotBoard> _hotBoards = HotBoard.values.toSet();
   int _updateCheckedAt = 0;
   String _skippedUpdate = '';
+  bool _autoCheckUpdate = true;
+  String _updateEtag = '';
+  String _updateCache = '';
 
   void _load() {
     final rawHistory = _prefs.getString('search_history');
@@ -193,7 +235,10 @@ class Settings extends ChangeNotifier {
     } else if (_prefs.containsKey('dark')) {
       _darkMode = (_prefs.getBool('dark') ?? false) ? 2 : 1;
     }
-    _fontScale = _prefs.getDouble('font_scale') ?? 1;
+    _fontScale = normalizeFontScale(_prefs.getDouble('font_scale') ?? 1);
+    _fontWeightDelta = normalizeFontWeightDelta(
+      _prefs.getInt('font_weight_delta') ?? 0,
+    );
     _accentColor = _prefs.getInt('accent_color') ?? 0;
     _mainTab = _prefs.getInt('main_tab') ?? 0;
     final item = FeedTabItem.fromKey(
@@ -232,12 +277,16 @@ class Settings extends ChangeNotifier {
     _hotBoards = parseHotBoards(_prefs.getString('hot_boards'));
     _updateCheckedAt = _prefs.getInt('update_checked_at') ?? 0;
     _skippedUpdate = _prefs.getString('skipped_update') ?? '';
+    _autoCheckUpdate = _prefs.getBool('auto_check_update') ?? true;
+    _updateEtag = _prefs.getString('update_etag') ?? '';
+    _updateCache = _prefs.getString('update_cache') ?? '';
   }
 
   List<String> get searchHistory => List.unmodifiable(_searchHistory);
   int get darkMode => _darkMode;
   bool get isDarkMode => _darkMode == 2;
   double get fontScale => _fontScale;
+  int get fontWeightDelta => _fontWeightDelta;
   int get accentColor => _accentColor;
   int get mainTab => _mainTab;
   FeedTabSelection get feedTab => _feedTab;
@@ -266,6 +315,9 @@ class Settings extends ChangeNotifier {
   Set<HotBoard> get hotBoards => _hotBoards;
   int get updateCheckedAt => _updateCheckedAt;
   String get skippedUpdate => _skippedUpdate;
+  bool get autoCheckUpdate => _autoCheckUpdate;
+  String get updateEtag => _updateEtag;
+  String get updateCache => _updateCache;
 
   void applyMainTab(int value) {
     _mainTab = value;
@@ -472,6 +524,20 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  void applyAutoCheckUpdate(bool value) {
+    _autoCheckUpdate = value;
+    _prefs.setBool('auto_check_update', value);
+    notifyListeners();
+  }
+
+  void applyUpdateCache(String etag, String body) {
+    _updateEtag = etag;
+    _updateCache = body;
+    _prefs
+      ..setString('update_etag', etag)
+      ..setString('update_cache', body);
+  }
+
   void applyDarkMode(int value) {
     _darkMode = value % 3;
     _prefs.setInt('dark_mode', _darkMode);
@@ -479,8 +545,28 @@ class Settings extends ChangeNotifier {
   }
 
   void applyFontScale(double value) {
-    _fontScale = value;
-    _prefs.setDouble('font_scale', value);
+    final normalized = normalizeFontScale(value);
+    if ((normalized - _fontScale).abs() < 0.001) return;
+    _fontScale = normalized;
+    _prefs.setDouble('font_scale', normalized);
+    notifyListeners();
+  }
+
+  void applyFontWeightDelta(int value) {
+    final normalized = normalizeFontWeightDelta(value);
+    if (normalized == _fontWeightDelta) return;
+    _fontWeightDelta = normalized;
+    _prefs.setInt('font_weight_delta', normalized);
+    notifyListeners();
+  }
+
+  void resetTypography() {
+    if ((_fontScale - 1.0).abs() < 0.001 && _fontWeightDelta == 0) return;
+    _fontScale = 1.0;
+    _fontWeightDelta = 0;
+    _prefs
+      ..setDouble('font_scale', 1.0)
+      ..setInt('font_weight_delta', 0);
     notifyListeners();
   }
 

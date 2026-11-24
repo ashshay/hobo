@@ -15,6 +15,7 @@ import '../widgets/app_icon.dart';
 import '../widgets/common.dart';
 import '../widgets/glyphs.dart';
 import '../widgets/remote_image.dart';
+import '../widgets/update_dialog.dart';
 
 /// 设置。分组照 Kotlin 版：外观 / 浏览 / 互动 / 更新 / 数据 / 账号 / 关于。
 class SettingsPage extends StatefulWidget {
@@ -66,10 +67,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 onPressed: () => _pickDarkMode(settings),
               ),
               HoboRow(
-                title: '字号',
-                subtitle: '${(settings.fontScale * 100).round()}%',
+                title: '字体与字号',
+                subtitle:
+                    '${(settings.fontScale * 100).round()}% · ${fontWeightLabel(settings.fontWeightDelta)}',
                 leading: const GlyphIcon(HoboGlyphs.textSize, size: 20),
-                onPressed: settings.cycleFontScale,
+                showChevron: true,
+                onPressed: () => openFontSettings(context),
               ),
               HoboRow(
                 title: '强调色',
@@ -196,11 +199,32 @@ class _SettingsPageState extends State<SettingsPage> {
             title: '更新',
             children: [
               HoboRow(
+                title: '自动检查更新',
+                subtitle: '启动时检测 GitHub 新版本并在首页提醒',
+                leading: const GlyphIcon(HoboGlyphs.refresh, size: 20),
+                trailing: Switch(
+                  value: settings.autoCheckUpdate,
+                  onChanged: settings.applyAutoCheckUpdate,
+                ),
+              ),
+              HoboRow(
                 title: '检查更新',
-                subtitle: '当前版本 $_version · 打开 GitHub 页面',
+                subtitle: _checkingUpdate
+                    ? '正在检查新版本…'
+                    : '当前版本 $_version',
                 leading: const GlyphIcon(HoboGlyphs.download, size: 20),
-                showChevron: true,
+                trailing: _checkingUpdate
+                    ? const ActivityIndicator(size: 18)
+                    : null,
+                showChevron: !_checkingUpdate,
                 onPressed: _checkUpdate,
+              ),
+              HoboRow(
+                title: 'GitHub 发布页',
+                subtitle: '查看最新版本说明与安装包',
+                leading: const GlyphIcon(HoboGlyphs.openExternal, size: 20),
+                showChevron: true,
+                onPressed: () => openReleasePage(context),
               ),
             ],
           ),
@@ -480,13 +504,28 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_checkingUpdate) return;
     setState(() => _checkingUpdate = true);
     try {
-      // 记一笔「什么时候查过」，数据页/诊断用得到。
-      context.read<Settings>().applyUpdateCheckedAt(
-        DateTime.now().millisecondsSinceEpoch,
+      final settings = context.read<Settings>();
+      final result = await Updater.checkForUpdate(
+        settings: settings,
+        force: true,
       );
-      // 版本说明、更新日志和安装包都在 GitHub 页面上，直接把人送过去，
-      // 不在设置里复述一遍版本号。内置网页顶栏还能一键转到系统浏览器。
-      openWeb(context, Updater.homepage, title: 'Hobo 更新');
+      if (!mounted) return;
+      if (result.hasUpdate) {
+        final info = result.update!;
+        final action = await showUpdateDialog(
+          context,
+          info,
+          currentVersion: result.currentVersion,
+          showDontRemind: false,
+        );
+        if (mounted && action.update) {
+          await openReleasePage(context, info);
+        }
+      } else if (result.error != null) {
+        showHoboToast(context, result.error!, level: BannerLevel.warning);
+      } else {
+        showHoboToast(context, '当前已是最新版本（v${result.currentVersion}）');
+      }
     } finally {
       if (mounted) setState(() => _checkingUpdate = false);
     }
@@ -877,7 +916,6 @@ class _AccentDialogState extends State<_AccentDialog> {
             controller: _hex,
             decoration: const InputDecoration(
               hintText: '自定义 #RRGGBB',
-              isCollapsed: true,
             ),
             onSubmitted: (_) => _applyCustom(),
           ),

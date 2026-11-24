@@ -97,6 +97,23 @@ class MainActivity : FlutterActivity() {
                         }
                         saveToGallery(result) { insertVideo(File(path), name, mime) }
                     }
+                    "saveLivePhoto" -> {
+                        val imageBytes = call.argument<ByteArray>("imageBytes")
+                        val videoPath = call.argument<String>("videoPath").orEmpty()
+                        val name = call.argument<String>("name")
+                            ?: "MVIMG_${System.currentTimeMillis()}.jpg"
+                        if (imageBytes == null || imageBytes.isEmpty()) {
+                            result.error("save_failed", "实况静图内容为空", null)
+                            return@setMethodCallHandler
+                        }
+                        if (videoPath.isEmpty()) {
+                            result.error("save_failed", "实况视频路径为空", null)
+                            return@setMethodCallHandler
+                        }
+                        saveToGallery(result) {
+                            insertLivePhoto(imageBytes, File(videoPath), name)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -285,12 +302,62 @@ class MainActivity : FlutterActivity() {
         return uri.toString()
     }
 
+    private fun insertLivePhoto(imageBytes: ByteArray, videoFile: File, name: String): String {
+        if (!videoFile.isFile || videoFile.length() <= 0L) error("实况视频文件为空")
+        val resolver = contentResolver
+        val finalName = if (name.lowercase().endsWith(".jpg") || name.lowercase().endsWith(".jpeg")) {
+            name
+        } else {
+            "$name.jpg"
+        }
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, finalName)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(
+                    MediaStore.Images.Media.RELATIVE_PATH,
+                    Environment.DIRECTORY_PICTURES + "/Hobo",
+                )
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: error("无法创建相册文件")
+        try {
+            resolver.openOutputStream(uri)?.use { out ->
+                MotionPhotoPacker.pack(imageBytes, videoFile, cacheDir, out)
+            } ?: error("无法写入相册文件")
+        } catch (t: Throwable) {
+            resolver.delete(uri, null, null)
+            throw t
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        }
+        return uri.toString()
+    }
+
     private fun insertVideo(source: File, name: String, mime: String): String {
         if (!source.isFile || source.length() <= 0L) error("视频文件为空")
+        val (readyFile, shouldDelete) = if (name.lowercase().endsWith(".mov") ||
+            mime.equals("video/quicktime", ignoreCase = true)
+        ) {
+            MotionPhotoPacker.ensureMp4(source, cacheDir)
+        } else {
+            source to false
+        }
+        val finalName = if (shouldDelete) {
+            name.replace(Regex("\\.mov$", RegexOption.IGNORE_CASE), ".mp4")
+        } else {
+            name
+        }
+        val finalMime = if (shouldDelete) "video/mp4" else mime
         val resolver = contentResolver
         val values = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, name)
-            put(MediaStore.Video.Media.MIME_TYPE, mime)
+            put(MediaStore.Video.Media.DISPLAY_NAME, finalName)
+            put(MediaStore.Video.Media.MIME_TYPE, finalMime)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(
                     MediaStore.Video.Media.RELATIVE_PATH,
@@ -303,11 +370,13 @@ class MainActivity : FlutterActivity() {
             ?: error("无法创建相册文件")
         try {
             resolver.openOutputStream(uri)?.use { out ->
-                source.inputStream().use { input -> input.copyTo(out) }
+                readyFile.inputStream().use { input -> input.copyTo(out) }
             } ?: error("无法写入相册文件")
         } catch (t: Throwable) {
             resolver.delete(uri, null, null)
             throw t
+        } finally {
+            if (shouldDelete && readyFile.exists()) readyFile.delete()
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             values.clear()

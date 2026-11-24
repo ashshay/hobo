@@ -3,20 +3,25 @@ library;
 
 final _superTopicContainer = RegExp(r'^100808[0-9a-fA-F]{32}$');
 
-/// `100808..._-_feed` 这类带栏目标记的地址先去掉尾巴再校验。
+/// `100808..._-_feed` 这类带栏目标记的地址或 `1022:100808...` 形式的 oid 先剥掉前后缀再校验。
 String? normalizedSuperTopicId(String value) {
-  final trimmed = value.trim();
-  final base = trimmed.endsWith('_-_feed')
-      ? trimmed.substring(0, trimmed.length - '_-_feed'.length)
-      : trimmed;
+  var base = value.trim();
+  if (base.startsWith('1022:')) {
+    base = base.substring('1022:'.length);
+  }
+  final split = base.indexOf('_-_');
+  if (split > 0) {
+    base = base.substring(0, split);
+  }
   return _superTopicContainer.hasMatch(base) ? base.toLowerCase() : null;
 }
 
 /// 只认超话链接：容器串、`m.weibo.cn/p/index?containerid=`、`weibo.com/page/`、
-/// `sinaweibo://pageinfo`、`intent://pageinfo`。认不出来返回 null。
+/// `weibo.com/p/`、`sinaweibo://pageinfo`、`intent://pageinfo`。认不出来返回 null。
 String? superTopicId(String raw) {
   final value = raw.trim();
-  if (_superTopicContainer.hasMatch(value)) return value.toLowerCase();
+  final direct = normalizedSuperTopicId(value);
+  if (direct != null) return direct;
   final uri = Uri.tryParse(value);
   if (uri == null) return null;
   if (uri.userInfo.isNotEmpty || uri.hasPort) return null;
@@ -28,8 +33,14 @@ String? superTopicId(String raw) {
       (host == 'weibo.com' || host == 'www.weibo.com');
   String? desktopId;
   if (desktopPage) {
-    if (!path.startsWith('/page/')) return null;
-    desktopId = normalizedSuperTopicId(path.substring('/page/'.length));
+    if (path.startsWith('/page/')) {
+      desktopId = normalizedSuperTopicId(path.substring('/page/'.length));
+    } else if (path.startsWith('/p/')) {
+      final tail = path.substring('/p/'.length).split('/').first;
+      desktopId = normalizedSuperTopicId(tail);
+    } else {
+      return null;
+    }
     if (desktopId == null) return null;
   }
   switch (scheme) {

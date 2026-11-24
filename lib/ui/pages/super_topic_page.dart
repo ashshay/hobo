@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/models.dart';
 import '../../data/repo.dart';
+import '../../data/store.dart';
 import '../../data/super_topic.dart';
 import '../routes.dart';
 import '../widgets/capsule.dart';
@@ -73,6 +74,19 @@ class _SuperTopicScreenState extends State<SuperTopicScreen>
     try {
       final page = await repo.superTopic(widget.containerId);
       if (!mounted) return;
+      context.read<Store>().addRecentSuperTopic(
+        SuperTopicSummary(
+          containerId: page.info.containerId,
+          title: page.info.title,
+          avatar: page.info.avatar,
+          desc1: page.info.description,
+          desc2: [
+            if (page.info.readCount.isNotEmpty) '阅读 ${page.info.readCount}',
+            if (page.info.postCount.isNotEmpty) '帖子 ${page.info.postCount}',
+            if (page.info.fanCount.isNotEmpty) '粉丝 ${page.info.fanCount}',
+          ].join(' · '),
+        ),
+      );
       var tabs = page.tabs;
       if (tabs.isEmpty) {
         tabs = defaultSuperTopicTabs(widget.containerId);

@@ -16,6 +16,7 @@ import '../widgets/glyphs.dart';
 import '../widgets/image_actions.dart';
 import '../widgets/remote_image.dart';
 import '../widgets/status_card.dart';
+import '../widgets/update_dialog.dart';
 
 /// 收藏夹：全局一份，跨账号保留。
 
@@ -455,11 +456,10 @@ class AboutPage extends StatelessWidget {
               ),
               HoboRow(
                 title: '检查更新',
-                subtitle: '在 GitHub 查看版本说明与安装包',
+                subtitle: '前往 GitHub 最新 Release 页面',
                 leading: const GlyphIcon(HoboGlyphs.openExternal, size: 20),
                 showChevron: true,
-                onPressed: () =>
-                    openWeb(context, Updater.homepage, title: 'Hobo 更新'),
+                onPressed: () => openReleasePage(context),
               ),
               HoboRow(
                 title: '隐私说明',

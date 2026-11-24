@@ -60,11 +60,12 @@ class CommentTile extends StatelessWidget {
     final scheme = context.colorScheme;
     final user = comment.user;
     final meta = _metaText();
-    final nameStyle = AppTextStyle.subheadline.of(context).copyWith(
-      fontSize: nested ? 14 : 15,
-      fontWeight: FontWeight.w600,
-      color: scheme.onSurface,
-    );
+    final nameStyle = AppTextStyle.subheadline
+        .of(context, emphasized: true)
+        .copyWith(
+          fontSize: nested ? 14 : 15,
+          color: scheme.onSurface,
+        );
 
     return Padding(
       padding: EdgeInsets.only(bottom: nested ? 8 : 10),

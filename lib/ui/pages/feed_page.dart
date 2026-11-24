@@ -460,6 +460,17 @@ class _FeedPageState extends State<FeedPage>
                             PressScale(
                               scale: 0.88,
                               child: IconButton(
+                                onPressed: () => openSuperTopicHub(context),
+                                tooltip: '超话',
+                                icon: const GlyphIcon(
+                                  HoboGlyphs.superTopic,
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                            PressScale(
+                              scale: 0.88,
+                              child: IconButton(
                                 onPressed: () => openHistory(context),
                                 tooltip: '浏览历史',
                                 icon: const GlyphIcon(

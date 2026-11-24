@@ -995,6 +995,96 @@ class Repo extends ChangeNotifier {
     );
   }
 
+  /// 我关注的超话列表：优先 m.weibo.cn 容器 `100803_-_followsuper`，
+  /// 首页为空或失败时回退到桌面端 `ajax/profile/topicContent`。
+  Future<SuperTopicListPage> followedSuperTopics({
+    String? cursor,
+    bool force = false,
+  }) async {
+    if (!hasSession()) throw ApiException('超话需要登录后查看', '-100');
+    final trimmed = (cursor ?? '').trim();
+    if (trimmed.startsWith('desktop:')) {
+      final page = int.tryParse(trimmed.substring('desktop:'.length)) ?? 2;
+      return _followedSuperTopicsDesktop(page: page);
+    }
+    final int? pageNumber = trimmed.startsWith('page:')
+        ? (int.tryParse(trimmed.substring('page:'.length)) ?? 2)
+        : null;
+    final params = <String, String?>{
+      'containerid': '100803_-_followsuper',
+      if (pageNumber != null)
+        'page': '$pageNumber'
+      else if (trimmed.isNotEmpty)
+        'since_id': trimmed,
+    };
+    try {
+      final root = await _get(
+        Api.url('https://m.weibo.cn/api/container/getIndex', params),
+        _loginCookie(),
+        force: force,
+      );
+      final parsed = parseSuperTopicList(root, currentPage: pageNumber ?? 1);
+      if (parsed.items.isNotEmpty || trimmed.isNotEmpty) return parsed;
+    } on ApiException catch (e) {
+      if (e.errno == '-100' || e.errno == '432') rethrow;
+      if (trimmed.isNotEmpty) rethrow;
+    } on Object {
+      if (trimmed.isNotEmpty) rethrow;
+    }
+    return _followedSuperTopicsDesktop(page: 1);
+  }
+
+  Future<SuperTopicListPage> _followedSuperTopicsDesktop({
+    required int page,
+  }) async {
+    final root = await Api.getDesktop(
+      Api.url('https://weibo.com/ajax/profile/topicContent', {
+        'tabid': '231093_-_chaohua',
+        'page': '$page',
+      }),
+      _loginCookie(),
+    );
+    final parsed = parseSuperTopicList(root, currentPage: page);
+    final next = parsed.nextCursor != null ? 'desktop:${page + 1}' : null;
+    return SuperTopicListPage(items: parsed.items, nextCursor: next);
+  }
+
+  /// 超话广场 / 热门超话。
+  Future<SuperTopicListPage> hotSuperTopics({
+    String? cursor,
+    bool force = false,
+  }) async {
+    final trimmed = (cursor ?? '').trim();
+    final int? pageNumber = trimmed.startsWith('page:')
+        ? (int.tryParse(trimmed.substring('page:'.length)) ?? 2)
+        : null;
+    const candidates = ['100803_-_page_hot_list', '100803'];
+    Object? lastError;
+    for (final cid in candidates) {
+      final params = <String, String?>{
+        'containerid': cid,
+        if (pageNumber != null)
+          'page': '$pageNumber'
+        else if (trimmed.isNotEmpty)
+          'since_id': trimmed,
+      };
+      try {
+        final root = await _get(
+          Api.url('https://m.weibo.cn/api/container/getIndex', params),
+          cookie(),
+          force: force,
+        );
+        final parsed = parseSuperTopicList(root, currentPage: pageNumber ?? 1);
+        if (parsed.items.isNotEmpty) return parsed;
+      } on Object catch (e) {
+        lastError = e;
+      }
+      if (trimmed.isNotEmpty) break;
+    }
+    if (lastError != null) throw lastError;
+    return const SuperTopicListPage(items: []);
+  }
+
   Future<List<TopicItem>> searchSuperTopics(String query) async {
     if (!hasSession()) throw ApiException('超话需要登录后查看', '-100');
     try {
@@ -1017,6 +1107,7 @@ class Repo extends ChangeNotifier {
               desc2: topic.desc2,
               scheme: topic.scheme,
               containerId: topic.containerId,
+              avatar: topic.avatar.isNotEmpty ? topic.avatar : page.info.avatar,
             ),
           );
         } else {

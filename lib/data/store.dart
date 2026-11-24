@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 import 'cookie_vault.dart';
 import 'follow_tags.dart';
 import 'models.dart';
+import 'super_topic.dart';
 
 class Store {
   Store._(this._dir);
@@ -397,6 +398,42 @@ class Store {
     o[uid] = tag?.key ?? '';
     _write('follows.json', o);
   }
+
+  // ---- 最近访问的超话 ----
+
+  List<SuperTopicSummary> recentSuperTopics() {
+    final out = <SuperTopicSummary>[];
+    for (final o in _readArray('super_topics.json')) {
+      final item = SuperTopicSummary.fromJson(o);
+      if (item != null) out.add(item);
+    }
+    return out;
+  }
+
+  void addRecentSuperTopic(SuperTopicSummary topic) {
+    if (topic.containerId.isEmpty || topic.title.isEmpty) return;
+    final existing = _readArray('super_topics.json');
+    final out = <Map<String, dynamic>>[topic.toJson()];
+    for (final o in existing) {
+      if (out.length >= 30) break;
+      if (o['containerId']?.toString().toLowerCase() ==
+          topic.containerId.toLowerCase()) {
+        continue;
+      }
+      out.add(o);
+    }
+    _write('super_topics.json', out);
+  }
+
+  void removeRecentSuperTopic(String containerId) {
+    final lower = containerId.toLowerCase();
+    _write('super_topics.json', [
+      for (final o in _readArray('super_topics.json'))
+        if (o['containerId']?.toString().toLowerCase() != lower) o,
+    ]);
+  }
+
+  void clearRecentSuperTopics() => _write('super_topics.json', const <Object>[]);
 
   // ---- 私信已读 ----
 

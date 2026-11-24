@@ -655,7 +655,10 @@ class _EdgedScroll extends StatelessWidget {
               child: AnimatedBuilder(
                 animation: controller,
                 builder: (context, _) {
-                  if (!controller.hasClients) return const SizedBox.shrink();
+                  if (!controller.hasClients ||
+                      !controller.position.hasContentDimensions) {
+                    return const SizedBox.shrink();
+                  }
                   final position = controller.position;
                   return Stack(
                     children: [
