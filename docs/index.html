@@ -50,7 +50,7 @@
       <div>
         <p class="badge">
           <span class="dot" aria-hidden="true"></span>
-          最新版本 <strong>1.08.0</strong> · build 10
+          最新版本 <strong>1.09.0</strong> · build 11
         </p>
         <h1>微博客户端，<br><span>换个做法</span>。</h1>
         <p class="hero-lead">
@@ -202,7 +202,7 @@
             <p>
               在手机浏览器里打开
               <a href="https://github.com/ashshay/hobo/releases/latest">Releases 页面</a>，
-              点 <code>hobo-1.08.0-arm64.apk</code>。
+              点 <code>hobo-1.09.0-arm64.apk</code>。
             </p>
           </li>
           <li>
@@ -218,7 +218,7 @@
         <aside class="panel">
           <h3>这一版的包</h3>
           <dl class="spec">
-            <dt>版本</dt><dd>1.08.0（versionCode 10）</dd>
+            <dt>版本</dt><dd>1.09.0（versionCode 11）</dd>
             <dt>ABI</dt><dd>arm64-v8a</dd>
             <dt>大小</dt><dd>约 20 MB</dd>
             <dt>minSdk</dt><dd>24（Android 7.0）</dd>
@@ -230,7 +230,7 @@
           </p>
           <h3>用 adb 装</h3>
           <pre class="code"><code><span class="c"># 下载后</span>
-adb install -r hobo-1.08.0-arm64.apk</code></pre>
+adb install -r hobo-1.09.0-arm64.apk</code></pre>
         </aside>
       </div>
     </div>
@@ -245,6 +245,17 @@ adb install -r hobo-1.08.0-arm64.apk</code></pre>
       </div>
 
       <ol class="log">
+        <li>
+          <h3>1.09.0 <time>2026-11-24</time></h3>
+          <ul>
+            <li>首页顶栏新增<strong>超话入口</strong>与超话中心：支持「我的超话」「超话广场」「最近访问」，以及按名称搜索或粘贴超话链接 / 容器 ID 直达。</li>
+            <li>修复 <strong>Live 实况图</strong>查看与保存：看图页自动缓存并支持长按画面 / 点按左下角「实况」胶囊播放与静音切换；保存时原生无损重封装为 <strong>Android Motion Photo</strong>（JPEG + 双标准 XMP + MP4），系统相册可直接识别播放，同时支持仅存静图或仅存实况视频。</li>
+            <li>视频播放新增<strong>全屏长按倍速</strong>：常规倍速按住临时加速到 <code>2.0x</code>（已是 2.0x 时加速到 <code>3.0x</code>），顶部显示倍速提示胶囊，松手自动恢复原速。</li>
+            <li>新增<strong>自动检测更新</strong>：冷启动在首页静默检测 GitHub Releases（带 ETag 条件缓存），有新版本时弹窗提醒，支持勾选「此版本不再提醒」，点「立即更新」直达 GitHub 最新 Release 页面；设置页同步提供自动更新开关与手动检查。</li>
+            <li>重构「<strong>字体与字号</strong>」设置页：顶部实时微博卡片预览 + 底部固定字号（85%–130%）与粗细（较细–粗体 5 档）双滑块，支持一键恢复默认。</li>
+            <li>个人页关注 / 粉丝 / 微博条数超过一万按「万」计数；修复发微博、私信与自定义色输入框的文字与边框重叠问题，以及超话多栏目胶囊首帧空指针。</li>
+          </ul>
+        </li>
         <li>
           <h3>1.08.0 <time>2026-11-23</time></h3>
           <ul>
