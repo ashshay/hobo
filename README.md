@@ -6,7 +6,7 @@ Hobo 是 Cobo 的 **Flutter / Dart 重写版**：同一个微博客户端，界�
 
 - 应用名：**Hobo**
 - 包名：`com.hobo.app`
-- 版本：`1.09.0+11`（界面显示 `1.09`）
+- 版本：`1.10.0+12`（界面显示 `1.10`）
 - 依赖：Flutter 3.47.6（Dart 3.13），`prism_ui` 以本地 path 依赖引入
 - 仓库：<https://github.com/ashshay/hobo> · 站点：<https://ashshay.github.io/hobo/>
 
@@ -14,11 +14,11 @@ Hobo 是 Cobo 的 **Flutter / Dart 重写版**：同一个微博客户端，界�
 
 | 包 | 路径 | 说明 |
 | --- | --- | --- |
-| release | `build/app/outputs/flutter-apk/app-release.apk` | 约 20 MB，`1.09.0 (11)`，**arm64 手机专用**（AOT，含最新改动） |
-| debug | `build/app/outputs/flutter-apk/app-debug.apk` | 约 232 MB，`1.09.0 (11)`，含三种 ABI，模拟器/调试用 |
+| release | `build/app/outputs/flutter-apk/app-release.apk` | 约 20 MB，`1.10.0 (12)`，**arm64 手机专用**（AOT，含最新改动） |
+| debug | `build/app/outputs/flutter-apk/app-debug.apk` | 约 232 MB，`1.10.0 (12)`，含三种 ABI，模拟器/调试用 |
 
 公开下载走 GitHub Releases：<https://github.com/ashshay/hobo/releases/latest>
-（资产名 `hobo-1.09.0-arm64.apk`）。
+（资产名 `hobo-1.10.0-arm64.apk`）。
 
 ```powershell
 adb install -r build\app\outputs\flutter-apk\app-release.apk
@@ -125,7 +125,7 @@ tool/
 | --- | --- |
 | 信息流 | 关注、推荐（102803）、好友圈、特别关注、悄悄关注、本地关注、收藏、附近、自建关注分组；翻页游标与去重；下拉刷新；双击底栏「微博」刷新并回到最新一条；冷启动落回上次浏览到的那条微博；**卡片上直接点赞 / 转发 / 进评论**；下滑隐藏顶栏与底栏；顶栏左侧发布、右侧历史 / 收藏 / 搜索 / 设置（扳手）；**左右滑动切换栏目（带淡入位移动画）**；点进卡片会写入浏览历史 |
 | 详情 | 正文、转发块（整块可点，进原微博）、九宫格、视频、投票入口、编辑记录；下拉刷新正文与评论；**评论配图**（九宫格，可点开、可长按保存）；评论按官方排版（头像/昵称/时间来源/正文/楼中楼/右上角点赞）、按热度与按时间切换（**翻页按 id 去重，不会重复贴同一页**）、楼中楼整页展开 |
-| 主页 | **封面 + 头像随滚动折叠进顶栏**（见下）、资料卡、认证/会员标、关注/取关、关注/粉丝列表、特别/悄悄/本地标记 |
+| 主页 | **封面 + 头像随滚动折叠进顶栏**（见下）、**分类条：关于 / 微博(N) / 相册 / 精选 / 视频**（左右滑也能切）、微博栏可切**列表/网格**并筛**全部/原创/图片/视频**、相册按月分组九宫格、资料卡、认证/会员标、关注/取关、关注/粉丝列表、特别/悄悄/本地标记 |
 | 搜索 | 联想词（XSRF）、搜索历史、五类热搜榜、综合/用户/话题三分类、话题多频道 |
 | 消息 | **顶栏四格胶囊：@我 / 评论 / 赞 / 私信，左右滑动也能翻**；@我 再分「微博 / 评论」两格小胶囊，微博那栏直接复用信息流卡片；评论与赞是通知卡片（谁 + 做了什么 + 被评论/被赞微博摘要），点进详情；私信会话列表（未读点）、聊天（文字/图片、长轮询、失败重试）、群聊 gid；四个栏目都支持下拉刷新与续页 |
 | 发布 | 首页顶栏「发布」进入；最多 9 图、可见范围、草稿、上传进度提示 |
@@ -190,6 +190,26 @@ python tool/make_site_images.py      # docs/screenshots/*.png → docs/assets/*.
 - 封面图片固定按整张大小排版、只改裁剪窗口，滚动时不会重新解码或重新取样；
 - 这一页不用 prism 的浮动顶栏：给 `PrismScaffold` 一个零高度的 bar，body 才能从屏幕最顶上开始画封面。
 
+## 个人主页分类
+
+折叠头下面是一排文字分类，顺序对齐微博 App：**关于 / 微博(N) / 相册 / 精选 / 视频**。
+选中项加粗并带一小段主色下划线；展开态跟着资料一起滚，滚到顶后被折叠头压住、**吸附在顶栏下面**
+（`ProfileTabBarDelegate` 是第二个 pinned sliver，排在折叠头之后）。左右横滑也能切栏目。
+
+| 栏目 | 数据源 | 说明 |
+| --- | --- | --- |
+| 微博 | `107603{uid}` | 原微博流；筛选只在已拉到的那几页上做，切「视频」这类少见类型时列表为空会自动续页 |
+| 相册 | 网页版 `weibo.com/ajax/profile/getImageWall` | 只认 `weibo.com` 的 Referer（手机端 Referer 回 403），走 `Api.getDesktop`；`sinceid` 翻页，`timeline_year/month` 只在一个月的第一张上出现，按「遇到新月份才换组」切段 |
+| 精选 | `231002{uid}_-_HOTMBLOG` | 这个人的热门微博，按 `cardlistInfo.page` 翻页；未登录深翻会回 `ok:-100`，当到底处理 |
+| 视频 | `231567{uid}` | 只列视频微博，游标是 `since_id` |
+| 关于 | 资料接口 | 认证说明、简介、微博/关注/粉丝、会员标、复制主页链接 / 浏览器打开 / 刷新资料 |
+
+微博栏右侧是「全部 ▾」筛选和列表/网格切换：列表就是普通卡片，网格两列、有图先铺图，
+没图的用正文当封面块。相册点开进看图页（视频封面点开进详情），长按仍能存图。
+
+`lib/ui/widgets/profile_tabs.dart`（分类条 + 筛选枚举）、`profile_album.dart`（相册分页控制器 +
+按月九宫格）、`profile_status_grid.dart`（微博网格）、`profile_about.dart`（关于栏）。
+
 ## 与 Kotlin 版的有意差异
 
 - **登录**：只保留网页登录与手动粘贴 Cookie。Kotlin 版的 `api.weibo.cn` 客户端容器登录
@@ -204,7 +224,7 @@ python tool/make_site_images.py      # docs/screenshots/*.png → docs/assets/*.
 
 ```powershell
 flutter analyze --no-fatal-infos   # 0 error / 0 warning
-flutter test                       # 26 个解析、时间、折叠头几何、看图链接与 Cookie 单元测试
+flutter test                       # 100 个解析、时间、折叠头几何、胶囊/翻页、主页分类与筛选单元测试
 dart run tool/smoke.dart           # 真接口冒烟（可选：HOBO_COOKIE=…）
 ```
 
@@ -217,7 +237,7 @@ dart run tool/smoke.dart           # 真接口冒烟（可选：HOBO_COOKIE=…�
 | 登录 | WebView 登录成功后系统 CookieManager 读到 4 个域名的 cookie，`session.json` 落地，uid 正确 |
 | 信息流 | 推荐流加载、九宫格/视频封面/LIVE 角标、栏目切换、下拉与翻页 |
 | 详情 | 正文 + 转发块 + 九宫格、热门/按时间评论、楼中楼预览、点赞/收藏/转发/评论入口 |
-| 主页 | 封面、认证与会员标、关注数、微博流、设置入口 |
+| 主页 | 封面、认证与会员标、关注数、微博流、设置入口；**分类条 关于/微博/相册/精选/视频、网格切换、全部/原创/图片/视频筛选、相册看图** |
 | 发现 | 搜索框、五类热搜榜、搜索历史、热门榜切换 |
 | 消息 | 四格胶囊拉到 @我的微博 / 收到的评论（滚到底显「没有更多了」）/ 收到的赞 / 私信；左右滑动切栏，切回时列表状态还在 |
 | 设置 | 账号卡、外观/浏览/互动/更新/数据/关于分组、深色模式切换、强调色、字号 |

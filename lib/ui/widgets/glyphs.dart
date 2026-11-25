@@ -235,6 +235,13 @@ abstract final class HoboGlyphs {
     GlyphPath('M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z'),
   ]);
 
+  /// 网格视图：和「列表」切换卡片布局。
+  static const grid = Glyph([
+    GlyphPath(
+      'M4 11h5V5H4v6zm0 7h5v-6H4v6zm6 0h5v-6h-5v6zm6 0h5v-6h-5v6zm-6-7h5V5h-5v6zm6-6v6h5V5h-5z',
+    ),
+  ]);
+
   /// 超话：微博官方双环螺旋钻石轮廓。
   static const superTopic = Glyph([
     GlyphPath(

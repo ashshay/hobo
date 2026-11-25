@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:prism_ui/prism_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
@@ -170,6 +171,35 @@ String fontWeightLabel(int delta) => switch (normalizeFontWeightDelta(delta)) {
   _ => '粗体',
 };
 
+/// 清透液态玻璃底栏默认参数（0% 磨砂 + 100% 折射）。
+const double defaultDockFrostAmount = 0.0;
+const double defaultDockRefractionAmount = 1.0;
+
+/// 将底栏磨砂/折射比例规范到 `[0.0, 1.0]` 并消除浮点尾差。
+double normalizeDockGlassAmount(double value) {
+  if (!value.isFinite) return 0.0;
+  final clamped = value.clamp(0.0, 1.0).toDouble();
+  return (clamped * 100).round() / 100;
+}
+
+String dockGlassStyleLabel(DockGlassPreset style) => switch (style) {
+  DockGlassPreset.prism => 'Prism 磨砂',
+  DockGlassPreset.crystal => '清透液态玻璃',
+};
+
+String dockGlassSummary({
+  required bool blurEffects,
+  required DockGlassPreset style,
+  required double frost,
+  required double refraction,
+}) {
+  if (!blurEffects) return '已关闭（需先开启模糊效果）';
+  if (style == DockGlassPreset.prism) return 'Prism 磨砂';
+  final frostPct = (normalizeDockGlassAmount(frost) * 100).round();
+  final refractPct = (normalizeDockGlassAmount(refraction) * 100).round();
+  return '清透液态 · 磨砂 $frostPct% · 折射 $refractPct%';
+}
+
 const accentPresets = <AccentPreset>[
   AccentPreset('跟随壁纸', 0),
   AccentPreset('微博橙', 0xFFFF8200),
@@ -210,6 +240,9 @@ class Settings extends ChangeNotifier {
   double _nearbyPlaceLat = 0;
   double _nearbyPlaceLon = 0;
   bool _blurEffects = true;
+  DockGlassPreset _dockGlassStyle = DockGlassPreset.prism;
+  double _dockFrostAmount = defaultDockFrostAmount;
+  double _dockRefractionAmount = defaultDockRefractionAmount;
   bool _monetCards = false;
   bool _confirmLike = false;
   bool _quickSwitchAccount = true;
@@ -264,6 +297,16 @@ class Settings extends ChangeNotifier {
     _nearbyPlaceLat = _prefs.getDouble('nearby_place_lat') ?? 0;
     _nearbyPlaceLon = _prefs.getDouble('nearby_place_lon') ?? 0;
     _blurEffects = _prefs.getBool('blur_effects') ?? true;
+    final dockIdx =
+        _prefs.getInt('dock_glass_style') ?? DockGlassPreset.prism.index;
+    _dockGlassStyle = DockGlassPreset
+        .values[dockIdx.clamp(0, DockGlassPreset.values.length - 1)];
+    _dockFrostAmount = normalizeDockGlassAmount(
+      _prefs.getDouble('dock_frost_amount') ?? defaultDockFrostAmount,
+    );
+    _dockRefractionAmount = normalizeDockGlassAmount(
+      _prefs.getDouble('dock_refraction_amount') ?? defaultDockRefractionAmount,
+    );
     _monetCards = _prefs.getBool('monet_cards') ?? false;
     _confirmLike = _prefs.getBool('confirm_like') ?? false;
     _quickSwitchAccount = _prefs.getBool('quick_switch_account') ?? true;
@@ -302,6 +345,16 @@ class Settings extends ChangeNotifier {
   double get nearbyPlaceLat => _nearbyPlaceLat;
   double get nearbyPlaceLon => _nearbyPlaceLon;
   bool get blurEffects => _blurEffects;
+  DockGlassPreset get dockGlassStyle => _dockGlassStyle;
+  double get dockFrostAmount => _dockFrostAmount;
+  double get dockRefractionAmount => _dockRefractionAmount;
+  NavigationDockGlassStyle get navigationDockGlassStyle =>
+      _dockGlassStyle == DockGlassPreset.crystal
+          ? NavigationDockGlassStyle.crystal(
+              frost: _dockFrostAmount,
+              refraction: _dockRefractionAmount,
+            )
+          : const NavigationDockGlassStyle.prism();
 
   /// 卡片背景是否也跟随壁纸取色（Monet 色调）。
   bool get monetCards => _monetCards;
@@ -444,6 +497,45 @@ class Settings extends ChangeNotifier {
   void applyBlurEffects(bool value) {
     _blurEffects = value;
     _prefs.setBool('blur_effects', value);
+    notifyListeners();
+  }
+
+  void applyDockGlassStyle(DockGlassPreset value) {
+    if (_dockGlassStyle == value) return;
+    _dockGlassStyle = value;
+    _prefs.setInt('dock_glass_style', value.index);
+    notifyListeners();
+  }
+
+  void applyDockFrostAmount(double value) {
+    final normalized = normalizeDockGlassAmount(value);
+    if ((normalized - _dockFrostAmount).abs() < 0.001) return;
+    _dockFrostAmount = normalized;
+    _prefs.setDouble('dock_frost_amount', normalized);
+    notifyListeners();
+  }
+
+  void applyDockRefractionAmount(double value) {
+    final normalized = normalizeDockGlassAmount(value);
+    if ((normalized - _dockRefractionAmount).abs() < 0.001) return;
+    _dockRefractionAmount = normalized;
+    _prefs.setDouble('dock_refraction_amount', normalized);
+    notifyListeners();
+  }
+
+  void resetDockGlass() {
+    if (_dockGlassStyle == DockGlassPreset.prism &&
+        (_dockFrostAmount - defaultDockFrostAmount).abs() < 0.001 &&
+        (_dockRefractionAmount - defaultDockRefractionAmount).abs() < 0.001) {
+      return;
+    }
+    _dockGlassStyle = DockGlassPreset.prism;
+    _dockFrostAmount = defaultDockFrostAmount;
+    _dockRefractionAmount = defaultDockRefractionAmount;
+    _prefs
+      ..setInt('dock_glass_style', _dockGlassStyle.index)
+      ..setDouble('dock_frost_amount', _dockFrostAmount)
+      ..setDouble('dock_refraction_amount', _dockRefractionAmount);
     notifyListeners();
   }
 

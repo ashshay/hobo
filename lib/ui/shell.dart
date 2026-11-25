@@ -238,7 +238,7 @@ class _HoboShellState extends State<HoboShell> {
               offset: chrome.hidden ? const Offset(0, 1) : Offset.zero,
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
-              child: AnimatedOpacity(
+              child: AnimatedLiquidGlassFade(
                 opacity: chrome.hidden ? 0 : 1,
                 duration: const Duration(milliseconds: 160),
                 child: Listener(
@@ -271,9 +271,10 @@ class _HoboShellState extends State<HoboShell> {
                     ],
                     selectedIndex: _index,
                     onSelected: _onDockSelected,
-                    // 选中态只移动底板并给图标上色：玻璃镜片会在深色背景上
-                    // 变成一整片紫色，也会在动画里把图标裁成一块遮罩。
-                    tintSelection: false,
+                    tintSelection:
+                        settings.blurEffects &&
+                        settings.dockGlassStyle == DockGlassPreset.crystal,
+                    glassStyle: settings.navigationDockGlassStyle,
                   ),
                 ),
               ),

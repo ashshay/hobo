@@ -134,6 +134,73 @@ class FeedController extends ChangeNotifier {
   }
 }
 
+/// 点赞：先改本地卡片，失败再撤回。列表本身没有独立状态，乐观更新最顺手。
+///
+/// 个人主页的几个栏目各有自己的 [FeedController]，但行为要跟信息流一致，
+/// 所以抽成顶层函数共用。
+Future<void> toggleStatusLike(
+  BuildContext context,
+  FeedController controller,
+  Status status,
+) async {
+  final repo = context.read<Repo>();
+  final settings = context.read<Settings>();
+  // 刚被微博限流过就别再「先点亮再回弹」了，直接说清楚。
+  if (repo.likeBlocked) {
+    showHoboToast(context, '点赞太频繁，稍后再试', level: BannerLevel.warning);
+    return;
+  }
+  if (settings.confirmLike && !status.liked) {
+    final ok = await showHoboConfirm(
+      context,
+      title: '给 @${status.user?.name ?? '这条'} 点个赞？',
+      confirmText: '点赞',
+    );
+    if (ok != true || !context.mounted) return;
+  }
+  final next = !status.liked;
+  controller.replace(
+    status.copyWith(
+      liked: next,
+      attitudes: (status.attitudes + (next ? 1 : -1)).clamp(0, 1 << 30),
+    ),
+  );
+  try {
+    await repo.like(status.id, liked: status.liked);
+  } on Object catch (e) {
+    if (!context.mounted) return;
+    controller.replace(status);
+    showHoboToast(
+      context,
+      e.toString(),
+      level: repo.likeBlocked ? BannerLevel.warning : BannerLevel.error,
+    );
+  }
+}
+
+/// 转发：弹输入框，成功后把卡片上的转发数 +1。
+Future<void> repostStatus(
+  BuildContext context,
+  FeedController controller,
+  Status status,
+) async {
+  final text = await showHoboInputDialog(
+    context,
+    title: '转发',
+    hint: '说点什么（可留空）',
+    multiline: true,
+    confirmText: '转发',
+  );
+  if (text == null || !context.mounted) return;
+  final repo = context.read<Repo>();
+  await runGuarded(context, () async {
+    await repo.repost(status.id, status.mid, text);
+    if (!context.mounted) return;
+    controller.replace(status.copyWith(reposts: status.reposts + 1));
+    showHoboToast(context, '已转发');
+  });
+}
+
 /// 微博列表：滚动到底自动翻页，空态与错误态统一。
 class StatusList extends StatefulWidget {
   const StatusList({
@@ -205,62 +272,12 @@ class _StatusListState extends State<StatusList> {
   ScrollController get _scroll => widget.scrollController ?? (_ownedScroll ??= ScrollController());
 
   /// 点赞：先改本地卡片，失败再撤回。列表页没有独立状态，乐观更新最顺手。
-  Future<void> _toggleLike(Status status) async {
-    final repo = context.read<Repo>();
-    final settings = context.read<Settings>();
-    // 刚被微博限流过就别再「先点亮再回弹」了，直接说清楚。
-    if (repo.likeBlocked) {
-      showHoboToast(context, '点赞太频繁，稍后再试', level: BannerLevel.warning);
-      return;
-    }
-    if (settings.confirmLike && !status.liked) {
-      final ok = await showHoboConfirm(
-        context,
-        title: '给 @${status.user?.name ?? '这条'} 点个赞？',
-        confirmText: '点赞',
-      );
-      if (ok != true || !mounted) return;
-    }
-    final next = !status.liked;
-    widget.controller.replace(
-      status.copyWith(
-        liked: next,
-        attitudes: (status.attitudes + (next ? 1 : -1)).clamp(0, 1 << 30),
-      ),
-    );
-    try {
-      await repo.like(status.id, liked: status.liked);
-    } on Object catch (e) {
-      if (!mounted) return;
-      widget.controller.replace(status);
-      showHoboToast(
-        context,
-        e.toString(),
-        level: repo.likeBlocked ? BannerLevel.warning : BannerLevel.error,
-      );
-    }
-  }
+  Future<void> _toggleLike(Status status) =>
+      toggleStatusLike(context, widget.controller, status);
 
   /// 转发：弹输入框，成功后把卡片上的转发数 +1。
-  Future<void> _repost(Status status) async {
-    final text = await showHoboInputDialog(
-      context,
-      title: '转发',
-      hint: '说点什么（可留空）',
-      multiline: true,
-      confirmText: '转发',
-    );
-    if (text == null || !mounted) return;
-    final repo = context.read<Repo>();
-    await runGuarded(context, () async {
-      await repo.repost(status.id, status.mid, text);
-      if (!mounted) return;
-      widget.controller.replace(
-        status.copyWith(reposts: status.reposts + 1),
-      );
-      showHoboToast(context, '已转发');
-    });
-  }
+  Future<void> _repost(Status status) =>
+      repostStatus(context, widget.controller, status);
 
   void _openComments(Status status) => widget.onOpenStatus?.call(status);
 

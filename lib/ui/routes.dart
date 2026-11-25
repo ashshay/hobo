@@ -13,6 +13,7 @@ import 'nav.dart';
 import 'pages/chat_page.dart' as chat;
 import 'pages/compose_page.dart';
 import 'pages/detail_page.dart';
+import 'pages/dock_glass_settings_page.dart';
 import 'pages/edit_history_page.dart';
 import 'pages/font_settings_page.dart';
 import 'pages/image_viewer_page.dart';
@@ -121,6 +122,10 @@ void openSettings(BuildContext context) {
 
 void openFontSettings(BuildContext context) {
   pushPage(context, const FontSettingsPage());
+}
+
+void openDockGlassSettings(BuildContext context) {
+  pushPage(context, const DockGlassSettingsPage(), dragBack: false);
 }
 
 void openAccounts(BuildContext context) {

@@ -67,6 +67,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                   onOpen: () => openStatus(context, status),
                   onOpenQuoted: (quoted) => openStatus(context, quoted),
                   onUser: (user) => openUser(context, user),
+                  onLink: (url) => handleLink(context, url),
                   onImage: (pics, i) =>
                       openImages(context, pics: pics, index: i),
                   onLongPressImage: (pics, i) =>

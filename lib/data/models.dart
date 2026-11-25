@@ -22,6 +22,7 @@ class User {
     this.verified = false,
     this.following = false,
     this.description = '',
+    this.verifiedReason = '',
     this.followers = 0,
     this.friends = 0,
     this.statuses = 0,
@@ -38,6 +39,9 @@ class User {
   final bool verified;
   final bool following;
   final String description;
+
+  /// 认证说明（「微博2022最具影响力互联网科技大V」这种），只有黄 V / 蓝 V 才有。
+  final String verifiedReason;
   final int followers;
   final int friends;
   final int statuses;
@@ -62,6 +66,7 @@ class User {
     bool? verified,
     bool? following,
     String? description,
+    String? verifiedReason,
     int? followers,
     int? friends,
     int? statuses,
@@ -75,6 +80,7 @@ class User {
       verified: verified ?? this.verified,
       following: following ?? this.following,
       description: description ?? this.description,
+      verifiedReason: verifiedReason ?? this.verifiedReason,
       followers: followers ?? this.followers,
       friends: friends ?? this.friends,
       statuses: statuses ?? this.statuses,
@@ -93,6 +99,7 @@ class User {
     'verified': verified,
     'following': following,
     'description': description,
+    'verified_reason': verifiedReason,
     'followers_count': followers,
     'follow_count': friends,
     'statuses_count': statuses,
@@ -118,6 +125,7 @@ class User {
       verified: o.boolean('verified'),
       following: o.boolean('following'),
       description: o.str('description'),
+      verifiedReason: o.str('verified_reason'),
       followers: o.count('followers_count', o.count('followers_count_str')),
       friends: o.intOf(
         'follow_count',
@@ -1116,6 +1124,90 @@ class FeedPage {
   final bool? hasMore;
 
   bool get isEmpty => items.isEmpty;
+}
+
+/// 主页「相册」里的一张照片。
+///
+/// 数据来自网页版 `ajax/profile/getImageWall`：接口只给 `pid`，图片地址按固定
+/// 规则拼；`timeline_year` / `timeline_month` 只在一个月的第一张上出现，后面
+/// 都是空串，分组时按「遇到新的月份才换组」处理（见 [groupAlbumPhotos]）。
+class AlbumPhoto {
+  const AlbumPhoto({
+    required this.pid,
+    this.mid = '',
+    this.type = 'pic',
+    this.year = 0,
+    this.month = 0,
+  });
+
+  final String pid;
+
+  /// 照片所属的微博 id，视频封面点开时用它进详情。
+  final String mid;
+
+  /// 接口的 `type`：普通照片是 `pic`，视频封面是 `video`。
+  final String type;
+  final int year;
+  final int month;
+
+  bool get isVideo => type == 'video';
+
+  /// 九宫格缩略图：360 宽足够铺一列。
+  String get thumb => _imageUrl('orj360');
+
+  /// 看图页用的原图。
+  String get large => _imageUrl('large');
+
+  String _imageUrl(String size) => 'https://wx1.sinaimg.cn/$size/$pid.jpg';
+
+  Pic toPic() => Pic(thumb: thumb, large: large);
+
+  static AlbumPhoto? from(Map<String, dynamic>? o) {
+    if (o == null) return null;
+    final pid = o.str('pid').trim();
+    if (pid.isEmpty) return null;
+    return AlbumPhoto(
+      pid: pid,
+      mid: o.str('mid'),
+      type: o.str('type').trim().toLowerCase(),
+      year: int.tryParse(o.str('timeline_year')) ?? 0,
+      month: int.tryParse(o.str('timeline_month')) ?? 0,
+    );
+  }
+}
+
+class AlbumPage {
+  const AlbumPage(this.photos, this.sinceId);
+
+  final List<AlbumPhoto> photos;
+
+  /// 下一页的游标（接口的 `since_id`），为空表示到底。
+  final String? sinceId;
+}
+
+/// 相册按月分组后的一段：标题是「2026年11月」，或第一段没有月份时的「更早」。
+class AlbumSection {
+  AlbumSection(this.title, this.photos);
+
+  final String title;
+  final List<AlbumPhoto> photos;
+}
+
+/// 按接口给的月份标记把照片切开：标记只出现一次，后面的空串都属于当前月份。
+List<AlbumSection> groupAlbumPhotos(Iterable<AlbumPhoto> photos) {
+  final sections = <AlbumSection>[];
+  for (final photo in photos) {
+    final titled = photo.year > 0 && photo.month > 0;
+    final title = titled ? '${photo.year}年${photo.month}月' : '';
+    if (sections.isEmpty) {
+      sections.add(AlbumSection(title.isEmpty ? '更早' : title, [photo]));
+    } else if (title.isNotEmpty && title != sections.last.title) {
+      sections.add(AlbumSection(title, [photo]));
+    } else {
+      sections.last.photos.add(photo);
+    }
+  }
+  return sections;
 }
 
 /// 评论排序：热门榜（游标翻页）与按时间（页码翻页）。

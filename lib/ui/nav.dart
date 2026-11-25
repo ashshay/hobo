@@ -2,9 +2,13 @@ import 'package:flutter/widgets.dart';
 import 'package:prism_ui/prism_ui.dart';
 
 /// 统一的页面推入方式：prism 的卡片转场（跟手返回、背景模糊都在里面）。
-Future<T?> pushPage<T>(BuildContext context, Widget page) {
+Future<T?> pushPage<T>(
+  BuildContext context,
+  Widget page, {
+  bool dragBack = true,
+}) {
   return Navigator.of(context).push<T>(
-    CardPageRoute<T>(builder: (_) => page),
+    CardPageRoute<T>(builder: (_) => page, dragBackEnabled: dragBack),
   );
 }
 

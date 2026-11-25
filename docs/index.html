@@ -50,7 +50,7 @@
       <div>
         <p class="badge">
           <span class="dot" aria-hidden="true"></span>
-          最新版本 <strong>1.09.0</strong> · build 11
+          最新版本 <strong>1.10.0</strong> · build 12
         </p>
         <h1>微博客户端，<br><span>换个做法</span>。</h1>
         <p class="hero-lead">
@@ -202,7 +202,7 @@
             <p>
               在手机浏览器里打开
               <a href="https://github.com/ashshay/hobo/releases/latest">Releases 页面</a>，
-              点 <code>hobo-1.09.0-arm64.apk</code>。
+              点 <code>hobo-1.10.0-arm64.apk</code>。
             </p>
           </li>
           <li>
@@ -218,7 +218,7 @@
         <aside class="panel">
           <h3>这一版的包</h3>
           <dl class="spec">
-            <dt>版本</dt><dd>1.09.0（versionCode 11）</dd>
+            <dt>版本</dt><dd>1.10.0（versionCode 12）</dd>
             <dt>ABI</dt><dd>arm64-v8a</dd>
             <dt>大小</dt><dd>约 20 MB</dd>
             <dt>minSdk</dt><dd>24（Android 7.0）</dd>
@@ -230,7 +230,7 @@
           </p>
           <h3>用 adb 装</h3>
           <pre class="code"><code><span class="c"># 下载后</span>
-adb install -r hobo-1.09.0-arm64.apk</code></pre>
+adb install -r hobo-1.10.0-arm64.apk</code></pre>
         </aside>
       </div>
     </div>
@@ -245,6 +245,16 @@ adb install -r hobo-1.09.0-arm64.apk</code></pre>
       </div>
 
       <ol class="log">
+        <li>
+          <h3>1.10.0 <time>2026-11-25</time></h3>
+          <ul>
+            <li>个人主页新增<strong>分类条</strong>：关于 / 微博 / 相册 / 精选 / 视频，跟着折叠头收起后吸附在顶栏下面，左右滑也能切。</li>
+            <li>「微博」栏支持<strong>列表 / 网格</strong>切换和「全部 / 原创 / 图片 / 视频」筛选，筛到空会自动续页；「相册」按月份分组九宫格，点开进看图页；「关于」汇总认证、简介与资料。</li>
+            <li>设置 → 外观新增<strong>底栏液态玻璃样式</strong>：清透液态 / Prism 磨砂两种风格，磨砂与折射双滑块实时预览，带快捷预设与一键重置，离开页面自动保存。</li>
+            <li>修复<strong>评论区点赞</strong>点完弹「操作失败」：表单请求补上 <code>Content-Type</code>，并按网页版接口顺序尝试评论点赞。</li>
+            <li>修复<strong>收藏页转发链里的 @ 与正文链接</strong>点不动：收藏 / 历史卡片接回统一的链接处理，@ 能直接进个人主页。</li>
+          </ul>
+        </li>
         <li>
           <h3>1.09.0 <time>2026-11-24</time></h3>
           <ul>

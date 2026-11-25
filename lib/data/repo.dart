@@ -1521,12 +1521,30 @@ class Repo extends ChangeNotifier {
     return true;
   }
 
-  Future<bool> likeComment(String id, {required bool liked}) => _postOk(
-    liked
-        ? 'https://m.weibo.cn/comment/dislike'
-        : 'https://m.weibo.cn/comment/like',
-    {'id': id},
-  );
+  Future<bool> likeComment(String id, {required bool liked}) async {
+    // 网页版现在走 api/likes/update|destroy（id + type=comment）。旧的
+    // comment/like 在服务端是「回 ok:1 但不落库」的空实现；新接口对一部分
+    // 账号会回 errno 20000（未知错误），所以两个都试，谁成功算谁的。
+    try {
+      final root = await _postJson(
+        liked
+            ? 'https://m.weibo.cn/api/likes/destroy'
+            : 'https://m.weibo.cn/api/likes/update',
+        {'id': id, 'type': 'comment'},
+      );
+      if (root.intOf('ok', 0) == 1) return true;
+    } on ApiException {
+      // 落到下面的旧接口。
+    } on ApiHttpException {
+      // 404 / 403 这类也退回旧接口。
+    }
+    return _postOk(
+      liked
+          ? 'https://m.weibo.cn/comment/dislike'
+          : 'https://m.weibo.cn/comment/like',
+      {'id': id},
+    );
+  }
 
   Future<bool> like(String id, {required bool liked}) async {
     // 微博被限流后会把窗口一直往后推，所以撞上以后先自己停手，
@@ -2145,6 +2163,82 @@ class Repo extends ChangeNotifier {
     String? sinceId,
     bool force = false,
   }) => container('107603$uid', sinceId: sinceId, force: force);
+
+  /// 主页「精选」：这个人的热门微博（`231002{uid}_-_HOTMBLOG`）。
+  ///
+  /// 接口按页码翻页，`cardlistInfo.page` 给的是下一页的页码；未登录时翻页会回
+  /// `ok:-100`（要登录），这时当到底处理，不要一直重试。
+  Future<FeedPage> userFeatured(
+    String uid, {
+    int page = 1,
+    bool force = false,
+  }) async {
+    final root = await _get(
+      Api.url('https://m.weibo.cn/api/container/getIndex', {
+        'containerid': '231002${uid}_-_HOTMBLOG',
+        if (page > 1) 'page': '$page',
+      }),
+      cookie(),
+      force: force,
+    );
+    if (root.intOf('ok', 1) == -100) {
+      return const FeedPage([], null, hasMore: false);
+    }
+    final result = parseCards(root);
+    final next = root.obj('data')?.obj('cardlistInfo')?.intOf('page', 0) ?? 0;
+    final hasMore = result.items.isNotEmpty && next > page;
+    return FeedPage(result.items, result.sinceId, hasMore: hasMore);
+  }
+
+  /// 主页「视频」：只列视频微博（`231567{uid}`），游标同样是 `since_id`。
+  Future<FeedPage> userVideos(
+    String uid, {
+    String? sinceId,
+    bool force = false,
+  }) => container('231567$uid', sinceId: sinceId, force: force);
+
+  /// 主页「相册」：网页版的图片墙（`ajax/profile/getImageWall`）。
+  ///
+  /// 这个接口只认 `weibo.com` 的 Referer，手机端 Referer 会回 403，所以走
+  /// [Api.getDesktop]。第一页带上 `has_album=true` 才会把相册封面一起带回来；
+  /// 翻页游标就是响应里的 `since_id`。
+  Future<AlbumPage> userPhotos(
+    String uid, {
+    String? sinceId,
+    bool force = false,
+  }) async {
+    final first = sinceId == null || sinceId.isEmpty;
+    final url = Api.url('https://weibo.com/ajax/profile/getImageWall', {
+      'uid': uid,
+      if (first) 'has_album': 'true' else 'sinceid': sinceId,
+    });
+    var cookie = this.cookie() ?? '';
+    if (cookie.isEmpty) cookie = await _visitorFor(null);
+    final Map<String, dynamic> root;
+    try {
+      root = await Api.getDesktop(url, cookie);
+    } on ApiHttpException catch (e) {
+      if (e.code == 403 || e.code == 432) {
+        throw ApiException('相册打不开，登录之后再试一次');
+      }
+      rethrow;
+    }
+    final data = root.obj('data');
+    if (data == null) {
+      final message = _firstNonEmpty([root.str('msg'), root.str('message')]);
+      if (message.contains('登录')) {
+        throw ApiException('相册需要登录后查看');
+      }
+      return const AlbumPage([], null);
+    }
+    final photos = <AlbumPhoto>[];
+    for (final item in data.arr('list') ?? const []) {
+      final photo = AlbumPhoto.from(jObj(item));
+      if (photo != null) photos.add(photo);
+    }
+    final next = data.str('since_id');
+    return AlbumPage(photos, next.isEmpty || next == sinceId ? null : next);
+  }
 
   /// 关注 / 粉丝列表：自己的走 `selffollowed` / `selffans`，别人的走 `231051`。
   Future<List<User>> relations(

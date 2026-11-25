@@ -188,7 +188,12 @@ class Api {
       method: 'POST',
       cookie: cookie,
       form: form,
-      headers: _weiboHeaders(cookie, st),
+      // Dio 对 Map 会做 urlEncode，但不会自动补 Content-Type；不写这一行时
+      // `comment/like` 这类接口会直接回 `{"ok":0}`（正文当成空表单）。
+      headers: {
+        ..._weiboHeaders(cookie, st),
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      },
     );
   }
 
@@ -207,6 +212,7 @@ class Api {
         'User-Agent': webUa,
         'Referer': referer,
         'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         if (cookie != null && cookie.isNotEmpty) 'Cookie': cookie,
       },
     );

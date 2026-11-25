@@ -100,6 +100,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               HoboRow(
+                title: '底栏液态玻璃样式',
+                subtitle: dockGlassSummary(
+                  blurEffects: settings.blurEffects,
+                  style: settings.dockGlassStyle,
+                  frost: settings.dockFrostAmount,
+                  refraction: settings.dockRefractionAmount,
+                ),
+                leading: const GlyphIcon(Glyphs.eye, size: 20),
+                showChevron: true,
+                onPressed: () => openDockGlassSettings(context),
+              ),
+              HoboRow(
                 title: '应用图标',
                 subtitle: settings.iconShape.label,
                 leading: HoboAppIcon(size: 22, shape: settings.iconShape),

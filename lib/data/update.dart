@@ -97,10 +97,10 @@ abstract final class Updater {
   static const autoCheckInterval = Duration(hours: 6);
 
   /// 界面上显示的版本号，跟 `pubspec.yaml` 的 `version: 1.09.0+11` 对齐。
-  static const displayVersion = '1.09';
+  static const displayVersion = '1.10';
 
   /// 跟 pubspec 的 `+N` 对齐。同一个版本号会反复出包，靠它区分是哪一次构建。
-  static const buildNumber = '11';
+  static const buildNumber = '12';
 
   /// `1.09（build 11）`
   static const versionLabel = '$displayVersion（build $buildNumber）';
