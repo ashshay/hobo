@@ -73,6 +73,17 @@ String? _weiboPrivateLink(String raw) {
     }
     return null;
   }
+  if (path.startsWith('userinfo')) {
+    final uid = _param(query, 'uid');
+    if (uid != null && RegExp(r'^\d+$').hasMatch(uid)) {
+      return '$_weiboMobile/u/$uid';
+    }
+    final nick = _param(query, 'nick');
+    if (nick != null && nick.isNotEmpty) {
+      return '$_weiboMobile/n/$nick';
+    }
+    return null;
+  }
   return null;
 }
 

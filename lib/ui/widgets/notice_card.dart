@@ -121,7 +121,7 @@ class NoticeCard extends StatelessWidget {
                 ],
                 if (status != null) ...[
                   const SizedBox(height: 8),
-                  _QuotedText(status: status!),
+                  _QuotedText(status: status!, onUser: onUser),
                 ],
               ],
             ),
@@ -134,14 +134,16 @@ class NoticeCard extends StatelessWidget {
 
 /// 被评论 / 被赞的那条微博的摘要块，观感和转发块一致。
 class _QuotedText extends StatelessWidget {
-  const _QuotedText({required this.status});
+  const _QuotedText({required this.status, this.onUser});
 
   final Status status;
+  final ValueChanged<User>? onUser;
 
   @override
   Widget build(BuildContext context) {
     final scheme = context.colorScheme;
-    final name = status.user?.name ?? '';
+    final user = status.user;
+    final name = user?.name ?? '';
     final text = status.plainText.trim();
     final summary = text.isEmpty
         ? (status.pics.isNotEmpty ? '[图片]' : '')
@@ -157,13 +159,19 @@ class _QuotedText extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (name.isNotEmpty)
-            Text(
-              '@$name',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyle.caption1.of(context).copyWith(
-                fontSize: 12,
-                color: scheme.primary,
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: user == null || user.id.isEmpty
+                  ? null
+                  : () => onUser?.call(user),
+              child: Text(
+                '@$name',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.caption1.of(context).copyWith(
+                  fontSize: 12,
+                  color: scheme.primary,
+                ),
               ),
             ),
           if (summary.isNotEmpty) ...[

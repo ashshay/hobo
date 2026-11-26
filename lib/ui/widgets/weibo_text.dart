@@ -39,6 +39,7 @@ class _WeiboTextState extends State<WeiboText> {
   TextStyle? _builtStyle;
   int? _builtMaxLines;
   Color? _builtLinkColor;
+  bool? _builtTappable;
   TextSpan? _span;
 
   @override
@@ -125,17 +126,20 @@ class _WeiboTextState extends State<WeiboText> {
           color: context.colorScheme.onSurface,
         );
     final linkColor = widget.linkColor ?? context.colorScheme.primary;
+    final tappable = widget.onLink != null || widget.onLinkSegment != null;
     if (_span == null ||
         _builtHtml != widget.html ||
         _builtStyle != baseStyle ||
         _builtMaxLines != widget.maxLines ||
-        _builtLinkColor != linkColor) {
+        _builtLinkColor != linkColor ||
+        _builtTappable != tappable) {
       _disposeRecognizers();
       _span = _buildSpan(baseStyle, linkColor);
       _builtHtml = widget.html;
       _builtStyle = baseStyle;
       _builtMaxLines = widget.maxLines;
       _builtLinkColor = linkColor;
+      _builtTappable = tappable;
     }
     return Text.rich(
       _span!,

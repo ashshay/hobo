@@ -186,6 +186,7 @@ class Pic {
     this.width = 0,
     this.height = 0,
     this.live = '',
+    this.heroTag = '',
   });
 
   final String thumb;
@@ -196,7 +197,19 @@ class Pic {
   /// 实况图（`type=livephoto`）附带的短视频；静图、GIF 都是空串。
   final String live;
 
+  /// 可选的上下文 Hero tag，确保同一张图出现在多张卡片、转发块、评论或相册时互不冲突。
+  final String heroTag;
+
   bool get isLive => live.isNotEmpty;
+
+  Pic withHeroTag(String tag) => Pic(
+    thumb: thumb,
+    large: large,
+    width: width,
+    height: height,
+    live: live,
+    heroTag: tag,
+  );
 }
 
 /// 实况视频地址：m.weibo.cn 放在 videoSrc，weibo.com 的 pic_infos 放在 video。

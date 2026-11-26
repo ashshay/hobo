@@ -31,7 +31,11 @@ final _token = RegExp(
   caseSensitive: false,
 );
 final _tag = RegExp(r'<[^>]*>');
-final _attr = RegExp(r'''([\w-]+)\s*=\s*"([^"]*)"''');
+// 微博真实接口里的 `<a href='/n/昵称'>`、`<img src='...'>` 大量使用单引号，
+// 必须同时兼容双引号、单引号与无引号属性，否则转发链里的 @ 全部变成死文本。
+final _attr = RegExp(
+  r'''([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))''',
+);
 final _numericEntity = RegExp(r'&#(\d+);');
 final _hexEntity = RegExp(r'&#[xX]([0-9a-fA-F]+);');
 
@@ -95,7 +99,7 @@ String _cleanText(String text) {
 Map<String, String> _attributesOf(String source) {
   final out = <String, String>{};
   for (final match in _attr.allMatches(source)) {
-    out[match[1]!.toLowerCase()] = match[2]!;
+    out[match[1]!.toLowerCase()] = match[2] ?? match[3] ?? match[4] ?? '';
   }
   return out;
 }
@@ -108,6 +112,8 @@ String _absoluteImageUrl(String url) {
   return 'https://wx1.sinaimg.cn/thumb150/$trimmed';
 }
 
+final _emailLead = RegExp(r'[A-Za-z0-9._%+-]$');
+
 /// HTML → 片段列表。链接里嵌套的标签会被压平成文字，链接本身保留可点。
 List<WeiboSegment> parseWeiboHtml(String html) {
   final source = normalizeWeiboHtml(html);
@@ -115,12 +121,35 @@ List<WeiboSegment> parseWeiboHtml(String html) {
   final buffer = StringBuffer();
   var cursor = 0;
 
+  void appendPlainWithMentions(String text) {
+    if (!text.contains('@')) {
+      segments.add(WeiboTextSegment(text));
+      return;
+    }
+    var pos = 0;
+    for (final match in weiboMentionPattern.allMatches(text)) {
+      if (match.start > 0 &&
+          _emailLead.hasMatch(text.substring(match.start - 1, match.start))) {
+        continue;
+      }
+      final name = match[1]!;
+      if (match.start > pos) {
+        segments.add(WeiboTextSegment(text.substring(pos, match.start)));
+      }
+      segments.add(WeiboLinkSegment(text: '@$name', url: '/n/$name'));
+      pos = match.end;
+    }
+    if (pos < text.length) {
+      segments.add(WeiboTextSegment(text.substring(pos)));
+    }
+  }
+
   void flush() {
     if (buffer.isEmpty) return;
     final text = _cleanText(buffer.toString());
     buffer.clear();
     if (text.isEmpty) return;
-    segments.add(WeiboTextSegment(text));
+    appendPlainWithMentions(text);
   }
 
   for (final match in _token.allMatches(source)) {
@@ -137,7 +166,12 @@ List<WeiboSegment> parseWeiboHtml(String html) {
       final text = _cleanText(anchorBody.replaceAll(_tag, '')).trim();
       if (text.isEmpty) continue;
       if (url.isEmpty) {
-        segments.add(WeiboTextSegment(text));
+        if (text.startsWith('@') && text.length > 1) {
+          final mentionName = text.substring(1).trim();
+          segments.add(WeiboLinkSegment(text: text, url: '/n/$mentionName'));
+        } else {
+          appendPlainWithMentions(text);
+        }
       } else {
         segments.add(WeiboLinkSegment(text: text, url: url));
       }
@@ -190,4 +224,4 @@ String chatPlainText(String? html) => stripHtml(html);
 
 /// 正文里 `#话题#` 与 `@昵称` 的提取，用于发布前的联想与高亮。
 final weiboTopicPattern = RegExp(r'#([^#\s]{1,40})#');
-final weiboMentionPattern = RegExp(r'@([\u4e00-\u9fa5\w\-]{1,30})');
+final weiboMentionPattern = RegExp(r'@([\u4e00-\u9fa5\w\-·]{1,30})');

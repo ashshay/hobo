@@ -198,12 +198,17 @@ class _PhotoTile extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              RemoteImage(
-                url: photo.thumb,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.low,
-                placeholderColor: context.surfaceLevel.next.colorOf(
-                  context.colorScheme,
+              Hero(
+                tag: 'album:${photo.pid}',
+                createRectTween: (begin, end) =>
+                    RectTween(begin: begin, end: end),
+                child: RemoteImage(
+                  url: photo.thumb,
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.low,
+                  placeholderColor: context.surfaceLevel.next.colorOf(
+                    context.colorScheme,
+                  ),
                 ),
               ),
               if (photo.isVideo)

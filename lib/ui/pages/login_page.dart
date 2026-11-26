@@ -1,4 +1,3 @@
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:prism_ui/icons/icons.dart';
 import 'package:prism_ui/prism_ui.dart';
@@ -13,9 +12,13 @@ import '../widgets/glyphs.dart';
 
 /// 网页登录。登录页与 App 共用系统 CookieManager：登录完成后把整表读出来落盘。
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key, this.addAccount = false});
+  const LoginPage({super.key, this.addAccount = false, this.webSlotBuilder});
 
   final bool addAccount;
+
+  /// 测试钩子：替换 WebView 槽位以验证布局边界，不触发平台 WebView 初始化。
+  @visibleForTesting
+  final WidgetBuilder? webSlotBuilder;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -27,12 +30,15 @@ class _LoginPageState extends State<LoginPage> {
   WebViewController? _web;
   bool _checking = false;
   bool _ready = false;
+  int _progress = 0;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _setup());
+    if (widget.webSlotBuilder == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _setup());
+    }
   }
 
   Future<void> _setup() async {
@@ -48,9 +54,20 @@ class _LoginPageState extends State<LoginPage> {
       )
       ..setNavigationDelegate(
         NavigationDelegate(
+          onProgress: (progress) {
+            if (mounted) setState(() => _progress = progress);
+          },
           onPageFinished: (url) {
+            if (mounted && _progress < 100) {
+              setState(() => _progress = 100);
+            }
             if (url.contains('m.weibo.cn') && !url.contains('passport')) {
               _tryLogin(silent: true);
+            }
+          },
+          onWebResourceError: (error) {
+            if (error.isForMainFrame == true && mounted) {
+              setState(() => _error = error.description);
             }
           },
         ),
@@ -123,6 +140,8 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final web = _web;
+    final scheme = context.colorScheme;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return HoboPage(
       title: widget.addAccount ? '添加账号' : '登录',
       leading: HoboBackButton(
@@ -134,54 +153,80 @@ class _LoginPageState extends State<LoginPage> {
       actions: [
         HoboBarAction(label: '完成', onPressed: _checking ? null : _tryLogin),
       ],
-      body: Stack(
-        children: [
-          if (web != null)
-            Positioned.fill(
-              child: WebViewWidget(controller: web),
-            )
-          else if (_ready)
-            const Center(child: ActivityIndicator(size: 24))
-          else
-            const HoboLoading(label: '正在打开登录页…'),
-          if (_error != null)
-            Positioned.fill(
-              child: ColoredBox(
-                color: context.colorScheme.surface,
-                child: HoboEmpty(
-                  title: '登录页打不开',
-                  message: _error,
-                  action: TextButton(
-                    onPressed: () => setState(() => _error = null),
-                    child: const Text('重试'),
+      // `HoboPage` 的顶栏浮在 body 上方：WebView 必须让出 `appBarInset`，
+      // 否则微博登录页顶部的「切换登录方式 / 账号密码 / 短信」栏会被顶栏完全挡住。
+      // 底部按钮同样改为独立底栏而非浮在网页上方，避免盖住网页底部的登录方式入口。
+      body: AppBarClearance(
+        child: Column(
+          children: [
+            if (_progress > 0 && _progress < 100)
+              LinearProgressIndicator(value: _progress / 100),
+            Expanded(
+              child: Stack(
+                children: [
+                  if (widget.webSlotBuilder != null)
+                    Positioned.fill(
+                      child: Builder(builder: widget.webSlotBuilder!),
+                    )
+                  else if (web != null)
+                    Positioned.fill(child: WebViewWidget(controller: web))
+                  else if (_ready)
+                    const Center(child: ActivityIndicator(size: 24))
+                  else
+                    const HoboLoading(label: '正在打开登录页…'),
+                  if (_error != null)
+                    Positioned.fill(
+                      child: ColoredBox(
+                        color: scheme.surface,
+                        child: HoboEmpty(
+                          title: '登录页打不开',
+                          message: _error,
+                          action: TextButton(
+                            onPressed: () {
+                              setState(() => _error = null);
+                              _web?.reload();
+                            },
+                            child: const Text('重试'),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.fromLTRB(16, 10, 16, bottomInset + 12),
+              decoration: BoxDecoration(
+                color: SurfaceLevel.page.colorOf(scheme),
+                border: Border(
+                  top: BorderSide(
+                    color: scheme.outlineVariant.withValues(alpha: 0.45),
+                    width: 0.5,
                   ),
                 ),
               ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _FootButton(
+                    label: '粘贴 Cookie',
+                    onPressed: _manualCookie,
+                  ),
+                  const SizedBox(width: 12),
+                  _FootButton(
+                    label: '不登录，纯本地浏览',
+                    onPressed: () async {
+                      await context.read<Repo>().enterLocalMode();
+                      if (!mounted) return;
+                      Navigator.of(context).pop(false);
+                    },
+                  ),
+                ],
+              ),
             ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: MediaQuery.paddingOf(context).bottom + 16,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _FootButton(
-                  label: '粘贴 Cookie',
-                  onPressed: _manualCookie,
-                ),
-                const SizedBox(width: 12),
-                _FootButton(
-                  label: '不登录，纯本地浏览',
-                  onPressed: () async {
-                    await context.read<Repo>().enterLocalMode();
-                    if (!mounted) return;
-                    Navigator.of(context).pop(false);
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

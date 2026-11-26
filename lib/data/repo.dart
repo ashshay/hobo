@@ -17,6 +17,7 @@ import 'emotions.dart';
 import 'follow_tags.dart';
 import 'json.dart';
 import 'like_gate.dart';
+import 'links.dart';
 import 'models.dart';
 import 'settings.dart';
 import 'store.dart';
@@ -138,6 +139,7 @@ class Repo extends ChangeNotifier {
 
   final Map<String, VoteInfo> _voteCache = {};
   final Map<String, String> _statusVoteIdCache = {};
+  final Map<String, String> _uidByNameCache = {};
   final Map<String, int> _likeBusy = {};
 
   /// 点赞被服务端限流后的退避闸门，见 [LikeGate]。
@@ -1457,31 +1459,107 @@ class Repo extends ChangeNotifier {
   /// 当成空串交给上层，按钮才会显示「没有更多」，而不是再请求一次首页。
   static String _nextCursor(String raw) => raw == '0' ? '' : raw;
 
-  /// 正文里的 @ 只有昵称，用用户搜索换回 uid，点 @ 才能在应用内打开主页。
+  /// 正文里的 @ 只有昵称，按可靠程度依次解析出 uid：
+  /// 1. weibo.com 桌面精准昵称接口（无搜索误匹配）；
+  /// 2. m.weibo.cn `/n/<昵称>` 302 跳转提取 `/u/<uid>`；
+  /// 3. m.weibo.cn 用户搜索兜底（精确匹配优先）。
   Future<String?> uidForName(String name) async {
-    final root = await _get(
-      Api.url(
-        'https://m.weibo.cn/api/container/getIndex',
-        {'containerid': '100103type=3&q=${Uri.encodeQueryComponent(name)}'},
-      ),
-      cookie(),
-    );
-    final cards = root.obj('data')?.arr('cards');
-    if (cards == null) return null;
-    String? fallback;
-    for (final card in cards) {
-      final group = jObj(card)?.arr('card_group');
-      if (group == null) continue;
-      for (final item in group) {
-        final user = jObj(item)?.obj('user');
-        if (user == null) continue;
-        final id = user.str('id');
-        if (id.isEmpty) continue;
-        if (user.str('screen_name') == name) return id;
+    final clean = name.trim().replaceFirst(RegExp(r'^@+'), '');
+    if (clean.isEmpty) return null;
+    final cached = _uidByNameCache[clean];
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    String? remember(String? uid) {
+      if (uid != null && uid.isNotEmpty && RegExp(r'^\d+$').hasMatch(uid)) {
+        _uidByNameCache[clean] = uid;
+        return uid;
+      }
+      return null;
+    }
+
+    // 1. 桌面端按 screen_name 精准查资料。
+    try {
+      final root = await Api.getDesktop(
+        Api.url('https://weibo.com/ajax/profile/info', {'screen_name': clean}),
+        cookie(),
+      );
+      final user = root.obj('data')?.obj('user');
+      final id = firstNonEmpty([user?.str('idstr') ?? '', user?.str('id') ?? '']);
+      final hit = remember(id);
+      if (hit != null) return hit;
+    } on Object {
+      // 访客态或接口波动时落到下一层。
+    }
+
+    // 2. `/n/<昵称>` 跳转目标里直接带 `/u/<uid>`。
+    try {
+      final redirected = await Api.resolveRedirect(
+        'https://m.weibo.cn/n/${Uri.encodeComponent(clean)}',
+        cookie(),
+      );
+      final hit = remember(weiboUserId(redirected));
+      if (hit != null) return hit;
+    } on Object {
+      // 同上。
+    }
+
+    // 3. 移动端用户搜索兜底：同时扫 card.user 与 card_group[].user。
+    try {
+      final root = await _get(
+        Api.url('https://m.weibo.cn/api/container/getIndex', {
+          'containerid': '100103type=3&q=${Uri.encodeQueryComponent(clean)}',
+        }),
+        cookie(),
+      );
+      final cards = root.obj('data')?.arr('cards');
+      if (cards == null) return null;
+      final lowerClean = clean.toLowerCase();
+      String? ciMatch;
+      String? fallback;
+      void inspectUser(Map<String, dynamic>? user) {
+        if (user == null) return;
+        final id = firstNonEmpty([user.str('idstr'), user.str('id')]);
+        if (id.isEmpty) return;
+        final screenName = user.str('screen_name');
+        if (screenName == clean) {
+          ciMatch = id;
+        } else if (ciMatch == null && screenName.toLowerCase() == lowerClean) {
+          ciMatch = id;
+        }
         fallback ??= id;
       }
+
+      for (final card in cards) {
+        final obj = jObj(card);
+        if (obj == null) continue;
+        final directUser = obj.obj('user');
+        if (directUser != null) {
+          if (directUser.str('screen_name') == clean) {
+            final hit = remember(
+              firstNonEmpty([directUser.str('idstr'), directUser.str('id')]),
+            );
+            if (hit != null) return hit;
+          }
+          inspectUser(directUser);
+        }
+        final group = obj.arr('card_group');
+        if (group == null) continue;
+        for (final item in group) {
+          final user = jObj(item)?.obj('user');
+          if (user == null) continue;
+          if (user.str('screen_name') == clean) {
+            final hit = remember(
+              firstNonEmpty([user.str('idstr'), user.str('id')]),
+            );
+            if (hit != null) return hit;
+          }
+          inspectUser(user);
+        }
+      }
+      return remember(ciMatch ?? fallback);
+    } on Object {
+      return null;
     }
-    return fallback;
   }
 
   Future<Map<String, dynamic>> _postJson(

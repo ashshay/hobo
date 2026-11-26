@@ -50,7 +50,7 @@
       <div>
         <p class="badge">
           <span class="dot" aria-hidden="true"></span>
-          最新版本 <strong>1.10.0</strong> · build 12
+          最新版本 <strong>1.11.0</strong> · build 13
         </p>
         <h1>微博客户端，<br><span>换个做法</span>。</h1>
         <p class="hero-lead">
@@ -75,7 +75,7 @@
           </li>
           <li>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M9 9h6v6H9z"/></svg>
-            arm64 · 约 20 MB
+            arm64 · 约 21 MB
           </li>
           <li>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="10.5" width="16" height="10.5" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
@@ -202,7 +202,7 @@
             <p>
               在手机浏览器里打开
               <a href="https://github.com/ashshay/hobo/releases/latest">Releases 页面</a>，
-              点 <code>hobo-1.10.0-arm64.apk</code>。
+              点 <code>hobo-1.11.0-arm64.apk</code>。
             </p>
           </li>
           <li>
@@ -218,9 +218,9 @@
         <aside class="panel">
           <h3>这一版的包</h3>
           <dl class="spec">
-            <dt>版本</dt><dd>1.10.0（versionCode 12）</dd>
+            <dt>版本</dt><dd>1.11.0（versionCode 13）</dd>
             <dt>ABI</dt><dd>arm64-v8a</dd>
-            <dt>大小</dt><dd>约 20 MB</dd>
+            <dt>大小</dt><dd>约 21 MB</dd>
             <dt>minSdk</dt><dd>24（Android 7.0）</dd>
             <dt>targetSdk</dt><dd>36</dd>
             <dt>签名</dt><dd>debug keystore</dd>
@@ -230,7 +230,7 @@
           </p>
           <h3>用 adb 装</h3>
           <pre class="code"><code><span class="c"># 下载后</span>
-adb install -r hobo-1.10.0-arm64.apk</code></pre>
+adb install -r hobo-1.11.0-arm64.apk</code></pre>
         </aside>
       </div>
     </div>
@@ -245,6 +245,15 @@ adb install -r hobo-1.10.0-arm64.apk</code></pre>
       </div>
 
       <ol class="log">
+        <li>
+          <h3>1.11.0 <time>2026-11-26</time></h3>
+          <ul>
+            <li>更换全新<strong>红粉流体磨砂玻璃应用图标包</strong>：完整适配 Android 8+ 自适应图标前景/背景分层、Android 13+ Material You 单色主题矢量、状态栏通知矢量与传统多密度图标。</li>
+            <li>彻底修复<strong>转发链 @ 提及无法点击进入个人主页</strong>：兼容微博真实接口中的单引号 <code>href='/n/...'</code> 属性与纯文本 <code>//@昵称</code> 兜底；<code>uidForName</code> 升级为「桌面精准查号 → <code>/n/</code> 重定向 → 搜索兜底」三层容错解析并带内存缓存；补齐编辑记录、评论回复与通知摘要中的 @ 跳转。</li>
+            <li>修复<strong>登录页被顶栏挡住切换登录方式</strong>：WebView 完整让出浮动顶栏高度，并将「粘贴 Cookie / 纯本地浏览」改为独立底栏，不再遮挡微博登录页顶部与底部的切换入口。</li>
+            <li>全面优化<strong>图片展开与收起动画</strong>：改为半透明无侧滑 <code>ImageViewerRoute</code>，为正文、转发块、评论与相册分配防冲突唯一 Hero tag，支持线性直达路径、超椭圆圆角平滑变形、缩略图垫底零灰块闪烁以及单指垂直下拉跟手缩放关闭。</li>
+          </ul>
+        </li>
         <li>
           <h3>1.10.0 <time>2026-11-25</time></h3>
           <ul>

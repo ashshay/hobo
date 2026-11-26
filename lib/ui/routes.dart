@@ -63,11 +63,15 @@ void openImages(
   BuildContext context, {
   required List<Pic> pics,
   int index = 0,
+  double sourceCornerRadius = AppCorner.md,
 }) {
   if (pics.isEmpty) return;
-  pushPage(
-    context,
-    ImageViewerPage(pics: pics, initialIndex: index.clamp(0, pics.length - 1)),
+  Navigator.of(context).push<void>(
+    ImageViewerRoute(
+      pics: pics,
+      initialIndex: index.clamp(0, pics.length - 1),
+      sourceCornerRadius: sourceCornerRadius,
+    ),
   );
 }
 
@@ -237,9 +241,16 @@ Future<void> handleLink(BuildContext context, String raw) async {
     openUserById(context, uid);
     return;
   }
-  final mention = weiboMentionName(resolved);
-  if (mention != null) {
-    final found = await repo.uidForName(mention);
+  final mention =
+      weiboMentionName(resolved) ??
+      (url.startsWith('@') && url.length > 1 ? url.substring(1).trim() : null);
+  if (mention != null && mention.isNotEmpty) {
+    String? found;
+    try {
+      found = await repo.uidForName(mention);
+    } on Object {
+      found = null;
+    }
     if (context.mounted) {
       if (found != null && found.isNotEmpty) {
         openUserById(context, found);

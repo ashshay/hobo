@@ -159,26 +159,19 @@ class CommentTile extends StatelessWidget {
               // 评论配图比正文小一号，长按也能存原图。
               PicGrid(
                 pics: comment.pics,
+                heroScope: comment.id.isNotEmpty ? 'c:${comment.id}' : null,
                 onOpen: onOpenImage,
                 onLongPress: onLongPressImage,
-                hero: false,
+                hero: comment.id.isNotEmpty,
                 maxWidthFactor: nested ? 0.6 : 0.78,
               ),
             ],
             if (!nested && comment.reply != null) ...[
               const SizedBox(height: 8),
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '回复 @${comment.reply?.user?.name ?? ''}：',
-                      style: TextStyle(color: scheme.primary),
-                    ),
-                    TextSpan(text: comment.reply!.plainText),
-                  ],
-                ),
+              WeiboText(
+                html: _replyHtml(comment.reply!),
                 maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+                onLink: onLink,
                 style: AppTextStyle.footnote.of(context).copyWith(
                   fontSize: 12.5,
                   height: 1.4,
@@ -217,6 +210,16 @@ class CommentTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _replyHtml(Comment reply) {
+    final user = reply.user;
+    final name = user?.name ?? '';
+    final target = user != null && user.id.isNotEmpty
+        ? '<a href="/u/${user.id}">@$name</a>'
+        : (name.isNotEmpty ? '<a href="/n/$name">@$name</a>' : '');
+    final body = reply.textHtml.isNotEmpty ? reply.textHtml : reply.plainText;
+    return target.isEmpty ? body : '回复 $target：$body';
   }
 
   String _metaText() {

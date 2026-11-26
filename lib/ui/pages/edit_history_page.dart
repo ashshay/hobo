@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/models.dart';
 import '../../data/repo.dart';
+import '../routes.dart';
 import '../widgets/common.dart';
 import '../widgets/remote_image.dart';
 import '../widgets/weibo_text.dart';
@@ -112,6 +113,7 @@ class _EditHistoryPageState extends State<EditHistoryPage> {
                       else
                         WeiboText(
                           html: version.textHtml,
+                          onLink: (url) => handleLink(context, url),
                           style: AppTextStyle.body.of(context).copyWith(
                             fontSize: 14,
                             height: 1.4,

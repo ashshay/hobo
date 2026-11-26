@@ -374,10 +374,10 @@ class _ProfilePageState extends State<ProfilePage> {
     for (var i = 0; i < photos.length; i++) {
       if (photos[i].isVideo) continue;
       if (i == index) start = pics.length;
-      pics.add(photos[i].toPic());
+      pics.add(photos[i].toPic().withHeroTag('album:${photos[i].pid}'));
     }
     if (pics.isEmpty) return;
-    openImages(context, pics: pics, index: start);
+    openImages(context, pics: pics, index: start, sourceCornerRadius: 3);
   }
 
   void _longPressPhoto(int index) {

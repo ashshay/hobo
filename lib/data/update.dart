@@ -96,11 +96,11 @@ abstract final class Updater {
   /// 自动检查网络节流间隔：6 小时内优先复用本地缓存结果，避免频繁打 GitHub 接口。
   static const autoCheckInterval = Duration(hours: 6);
 
-  /// 界面上显示的版本号，跟 `pubspec.yaml` 的 `version: 1.09.0+11` 对齐。
-  static const displayVersion = '1.10';
+  /// 界面上显示的版本号，跟 `pubspec.yaml` 的 `version: 1.11.0+13` 对齐。
+  static const displayVersion = '1.11';
 
   /// 跟 pubspec 的 `+N` 对齐。同一个版本号会反复出包，靠它区分是哪一次构建。
-  static const buildNumber = '12';
+  static const buildNumber = '13';
 
   /// `1.09（build 11）`
   static const versionLabel = '$displayVersion（build $buildNumber）';

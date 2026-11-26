@@ -14,9 +14,13 @@ import 'weibo_text.dart';
 /// 缩略图与看图页共用的 Hero tag：点开缩略图时做放大动画。
 String hoboPicHeroTag(String url) => 'hobo-pic:$url';
 
-/// 一张图在卡片与看图页里用同一个 tag（缩略图优先，保证两边取到同一个 key）。
-String picHeroTag(Pic pic) =>
-    hoboPicHeroTag(pic.thumb.isNotEmpty ? pic.thumb : pic.large);
+/// 一张图在卡片与看图页里用同一个 tag（优先使用带作用域的唯一 tag，防止同屏重图冲突）。
+String picHeroTag(Pic pic) => pic.heroTag.isNotEmpty
+    ? pic.heroTag
+    : hoboPicHeroTag(pic.thumb.isNotEmpty ? pic.thumb : pic.large);
+
+RectTween _linearPicRectTween(Rect? begin, Rect? end) =>
+    RectTween(begin: begin, end: end);
 
 /// 正文里「查看图片」这类链接：点了直接进看图页，而不是跳网页或原微博。
 const _viewImageLabels = {'查看图片', '查看大图', '查看原图'};
@@ -125,6 +129,7 @@ class StatusCard extends StatelessWidget {
             const SizedBox(height: 10),
             PicGrid(
               pics: status.pics,
+              heroScope: status.id.isNotEmpty ? 's:${status.id}' : null,
               onOpen: onImage,
               onLongPress: onLongPressImage,
             ),
@@ -154,6 +159,7 @@ class StatusCard extends StatelessWidget {
             const SizedBox(height: 10),
             RetweetBlock(
               status: status.retweeted!,
+              heroScope: 'rt:${status.id}:${status.retweeted!.id}',
               onOpen: onOpenQuoted == null
                   ? null
                   : () => onOpenQuoted!(status.retweeted!),
@@ -303,6 +309,7 @@ class PicGrid extends StatelessWidget {
     this.onOpen,
     this.onLongPress,
     this.hero = true,
+    this.heroScope,
     this.maxWidthFactor = 1,
   });
 
@@ -312,12 +319,27 @@ class PicGrid extends StatelessWidget {
   /// 长按缩略图（看原图 / 存到相册）。
   final void Function(List<Pic> pics, int index)? onLongPress;
 
-  /// 转发块里关掉 Hero：同一张图可能在本条与转发块里各出现一次，
-  /// 同 tag 重复会让 Hero 断言失败。
+  /// 是否启用 Hero 展开动画。配合 [heroScope] 为每处上下文生成唯一 tag，
+  /// 转发块与评论区也能安全参与无缝展开动画。
   final bool hero;
+
+  /// Hero 作用域前缀（如微博 id、转发块 id、评论 id），避免同屏重图冲突。
+  final String? heroScope;
 
   /// 整格最宽占可用宽度的比例：评论区的图比正文小一号。
   final double maxWidthFactor;
+
+  List<Pic> get _taggedPics {
+    if (!hero) return pics;
+    final scope = heroScope;
+    if (scope == null || scope.isEmpty) return pics;
+    return [
+      for (var i = 0; i < pics.length; i++)
+        pics[i].heroTag.isNotEmpty
+            ? pics[i]
+            : pics[i].withHeroTag('$scope#$i:${picHeroTag(pics[i])}'),
+    ];
+  }
 
   int get _columns => pics.length == 1
       ? 1
@@ -328,6 +350,7 @@ class PicGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (pics.isEmpty) return const SizedBox.shrink();
+    final items = _taggedPics;
     final columns = _columns;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -335,8 +358,8 @@ class PicGrid extends StatelessWidget {
             ? constraints.maxWidth
             : 320.0;
         final available = full * maxWidthFactor;
-        if (pics.length == 1) {
-          final pic = pics.first;
+        if (items.length == 1) {
+          final pic = items.first;
           final ratio = pic.width > 0 && pic.height > 0
               ? pic.width / pic.height
               : 3 / 4;
@@ -357,10 +380,10 @@ class PicGrid extends StatelessWidget {
                         hero: hero,
                         aspectRatio: ratio.clamp(0.55, 2.2),
                         width: available * (portrait ? 0.52 : 1.0),
-                        onTap: onOpen == null ? null : () => onOpen!(pics, 0),
+                        onTap: onOpen == null ? null : () => onOpen!(items, 0),
                         onLongPress: onLongPress == null
                             ? null
-                            : () => onLongPress!(pics, 0),
+                            : () => onLongPress!(items, 0),
                       ),
                     ),
                   ),
@@ -372,8 +395,8 @@ class PicGrid extends StatelessWidget {
         // 卡片宽是确定的，按格宽下采样解码，九宫格不再整张原图进显存。
         final cellWidth = (available - 4.0 * (columns - 1)) / columns;
         final rows = <Widget>[];
-        for (var row = 0; row * columns < pics.length; row++) {
-          final slice = pics.skip(row * columns).take(columns).toList();
+        for (var row = 0; row * columns < items.length; row++) {
+          final slice = items.skip(row * columns).take(columns).toList();
           rows.add(
             Padding(
               padding: EdgeInsets.only(top: row == 0 ? 0 : 4),
@@ -392,13 +415,13 @@ class PicGrid extends StatelessWidget {
                                 onTap: onOpen == null
                                     ? null
                                     : () => onOpen!(
-                                        pics,
+                                        items,
                                         row * columns + col,
                                       ),
                                 onLongPress: onLongPress == null
                                     ? null
                                     : () => onLongPress!(
-                                        pics,
+                                        items,
                                         row * columns + col,
                                       ),
                               )
@@ -448,7 +471,13 @@ class _SinglePic extends StatelessWidget {
       filterQuality: FilterQuality.medium,
       placeholderColor: context.colorScheme.surfaceContainerHighest,
     );
-    if (hero) image = Hero(tag: picHeroTag(pic), child: image);
+    if (hero) {
+      image = Hero(
+        tag: picHeroTag(pic),
+        createRectTween: _linearPicRectTween,
+        child: image,
+      );
+    }
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -525,7 +554,13 @@ class _PicTile extends StatelessWidget {
       fit: BoxFit.cover,
       placeholderColor: context.colorScheme.surfaceContainerHighest,
     );
-    if (hero) image = Hero(tag: picHeroTag(pic), child: image);
+    if (hero) {
+      image = Hero(
+        tag: picHeroTag(pic),
+        createRectTween: _linearPicRectTween,
+        child: image,
+      );
+    }
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -682,6 +717,7 @@ class RetweetBlock extends StatelessWidget {
   const RetweetBlock({
     super.key,
     required this.status,
+    this.heroScope,
     this.onOpen,
     this.onUser,
     this.onImage,
@@ -690,6 +726,7 @@ class RetweetBlock extends StatelessWidget {
   });
 
   final Status status;
+  final String? heroScope;
 
   /// 点整块转发内容都进原微博，不只昵称可点。
   final VoidCallback? onOpen;
@@ -755,9 +792,10 @@ class RetweetBlock extends StatelessWidget {
               const SizedBox(height: 6),
               PicGrid(
                 pics: status.pics,
+                heroScope: heroScope ?? (status.id.isNotEmpty ? 'rt:${status.id}' : null),
                 onOpen: onImage,
                 onLongPress: onLongPressImage,
-                hero: false,
+                hero: heroScope != null || status.id.isNotEmpty,
               ),
             ],
           ],
