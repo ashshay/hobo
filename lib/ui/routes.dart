@@ -308,16 +308,16 @@ Future<void> showStatusActions(BuildContext context, Status status) async {
     (
       favorited ? '取消收藏' : '收藏',
       () async {
-        try {
-          await repo.favorite(status.id, favorited: favorited);
-          if (context.mounted) {
-            showHoboToast(context, favorited ? '已取消收藏' : '已收藏');
-          }
-        } on Object catch (e) {
-          if (context.mounted) {
-            showHoboToast(context, e.toString(), level: BannerLevel.error);
-          }
-        }
+        // 本机立刻生效；登录态下顺带写一次微博收藏夹，写失败只提示不回滚。
+        final result = await repo.toggleFavorite(status);
+        if (!context.mounted) return;
+        final label = result.favorited ? '已收藏' : '已取消收藏';
+        final error = result.syncError;
+        showHoboToast(
+          context,
+          error == null ? label : '$label，微博收藏失败：$error',
+          level: error == null ? BannerLevel.info : BannerLevel.warning,
+        );
       },
     ),
     (

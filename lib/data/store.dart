@@ -358,6 +358,27 @@ class Store {
     _write('favorites.json', out);
   }
 
+  /// 批量合并收藏。在线收藏夹一页二十来条，逐条走 [addFavorite] 会每一条都重写一次
+  /// `favorites.json`，低端机上肉眼可见地卡，所以整页只落一次盘。
+  void addFavorites(List<Status> statuses) {
+    if (statuses.isEmpty) return;
+    final existing = _readArray('favorites.json');
+    final seen = <String>{
+      for (final o in existing) o['id']?.toString() ?? '',
+    };
+    final out = <Map<String, dynamic>>[];
+    for (final status in statuses) {
+      if (status.id.isEmpty || !seen.add(status.id)) continue;
+      out.add((status.favorited ? status : status.copyWith(favorited: true)).toJson());
+    }
+    if (out.isEmpty) return;
+    for (final o in existing) {
+      if (out.length >= 500) break;
+      out.add(o);
+    }
+    _write('favorites.json', out);
+  }
+
   void removeFavorite(String id) {
     if (id.isEmpty) return;
     _write('favorites.json', [

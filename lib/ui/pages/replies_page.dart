@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/models.dart';
 import '../../data/repo.dart';
+import '../../data/settings.dart';
 import '../routes.dart';
 import '../widgets/comment_tile.dart';
 import '../widgets/common.dart';
@@ -134,6 +135,7 @@ class _RepliesPageState extends State<RepliesPage> {
           CommentTile(
             comment: widget.comment,
             authorId: widget.authorId,
+            style: context.watch<Settings>().commentStyle,
             onUser: (user) => openUser(context, user),
             onLink: (url) => handleLink(context, url),
             onOpenImage: (pics, index) =>

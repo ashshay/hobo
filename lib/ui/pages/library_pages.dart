@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:prism_ui/icons/icons.dart';
@@ -14,12 +16,13 @@ import '../widgets/app_icon.dart';
 import '../widgets/common.dart';
 import '../widgets/glyphs.dart';
 import '../widgets/image_actions.dart';
+import '../widgets/refresh.dart';
 import '../widgets/remote_image.dart';
 import '../widgets/status_card.dart';
 import '../widgets/update_dialog.dart';
 
-/// 收藏夹：全局一份，跨账号保留。
-
+/// 收藏夹：登录态下读微博收藏夹（网页版 / 官方客户端收藏过的都在），
+/// 纯本地模式退回本机那份星标。
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
 
@@ -28,16 +31,82 @@ class FavoritesPage extends StatefulWidget {
 }
 
 class _FavoritesPageState extends State<FavoritesPage> {
+  /// 光标还在就说明后面还有一页，列表末尾给「加载更多」。
   List<Status> _items = const [];
+  bool _online = false;
+  bool _loading = false;
+  String? _cursor;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadLocal();
+    unawaited(_refresh());
   }
 
-  void _load() {
+  /// 本机星标先铺一屏，联网那条回来了再换掉；纯本地模式到这里就结束。
+  void _loadLocal() {
     setState(() => _items = context.read<Store>().favorites());
+  }
+
+  Future<void> _refresh() async {
+    final repo = context.read<Repo>();
+    final online = repo.session?.loggedIn == true;
+    if (!online) {
+      setState(() {
+        _online = false;
+        _error = null;
+        _loading = false;
+      });
+      _loadLocal();
+      return;
+    }
+    setState(() {
+      _online = true;
+      _loading = _items.isEmpty;
+      _error = null;
+    });
+    try {
+      final page = await repo.onlineFavorites(force: true);
+      if (!mounted) return;
+      setState(() {
+        _items = page.items;
+        _cursor = page.sinceId;
+        _loading = false;
+      });
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    final cursor = _cursor;
+    if (cursor == null || cursor.isEmpty || _loading) return;
+    setState(() => _loading = true);
+    try {
+      final page = await context.read<Repo>().onlineFavorites(cursor: cursor);
+      if (!mounted) return;
+      final seen = {for (final status in _items) status.id};
+      setState(() {
+        _items = [
+          ..._items,
+          ...page.items.where((status) => seen.add(status.id)),
+        ];
+        _cursor = page.sinceId;
+        _loading = false;
+      });
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
   }
 
   @override
@@ -45,52 +114,101 @@ class _FavoritesPageState extends State<FavoritesPage> {
     return HoboPage(
       title: '收藏',
       leading: const HoboBackButton(),
-      body: _items.isEmpty
-          ? const HoboEmpty(
-              title: '还没有收藏',
-              message: '在微博卡片的操作栏里点收藏',
-              icon: HoboGlyphs.star,
-            )
-          : ListView.separated(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                pageTopInset(context),
-                16,
-                pageBottomInset(context),
+      actions: [
+        if (_online)
+          HoboBarAction(
+            label: '刷新',
+            onPressed: () => unawaited(_refresh()),
+          ),
+      ],
+      body: _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_items.isEmpty) {
+      if (_loading) return const HoboLoading(label: '正在读微博收藏…');
+      return HoboEmpty(
+        title: _error == null ? '还没有收藏' : '收藏没拉到',
+        message: _error == null
+            ? (_online ? '在微博里收藏的会出现在这里' : '在微博卡片的操作栏里点收藏')
+            : '$_error\n下拉或点右上角「刷新」重试',
+        icon: HoboGlyphs.star,
+      );
+    }
+    return HoboRefresh(
+      onRefresh: _refresh,
+      topInset: context.appBarInset,
+      child: ListView.separated(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          pageTopInset(context),
+          16,
+          pageBottomInset(context),
+        ),
+        itemCount: _items.length + (_cursor == null ? 0 : 1),
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          if (index >= _items.length) {
+            return Center(
+              child: HoboBarAction(
+                label: _loading ? '加载中…' : '加载更多',
+                onPressed: _loading ? null : () => unawaited(_loadMore()),
               ),
-              itemCount: _items.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final status = _items[index];
-                return StatusCard(
-                  status: status,
-                  onOpen: () => openStatus(context, status),
-                  onOpenQuoted: (quoted) => openStatus(context, quoted),
-                  onUser: (user) => openUser(context, user),
-                  onLink: (url) => handleLink(context, url),
-                  onImage: (pics, i) =>
-                      openImages(context, pics: pics, index: i),
-                  onLongPressImage: (pics, i) =>
-                      showImageActions(context, pics: pics, index: i),
-                  onVideo: (video) => openVideo(context, video),
-                  onLongPress: () => _remove(status),
-                  onFavorite: () => _remove(status),
-                );
-              },
-            ),
+            );
+          }
+          final status = _items[index];
+          return StatusCard(
+            status: status,
+            onOpen: () => openStatus(context, status),
+            onOpenQuoted: (quoted) => openStatus(context, quoted),
+            onUser: (user) => openUser(context, user),
+            onLink: (url) => handleLink(context, url),
+            onImage: (pics, i) => openImages(context, pics: pics, index: i),
+            onLongPressImage: (pics, i) =>
+                showImageActions(context, pics: pics, index: i),
+            onVideo: (video) => openVideo(context, video),
+            onLongPress: () => _remove(status),
+            onFavorite: () => _remove(status),
+          );
+        },
+      ),
     );
   }
 
   Future<void> _remove(Status status) async {
+    final repo = context.read<Repo>();
+    final store = context.read<Store>();
     final ok = await showHoboConfirm(
       context,
       title: '取消收藏？',
       destructive: true,
     );
-    if (ok != true) return;
-    context.read<Store>().removeFavorite(status.id);
-    _load();
-    if (mounted) showHoboToast(context, '已移出收藏');
+    if (ok != true || !mounted) return;
+    String? error;
+    // 在线收藏页里取消就得连服务器一起删；不然下次刷新它又回来了。
+    if (_online) {
+      try {
+        await repo.setOnlineFavorite(status.id, favorited: false);
+      } on Object catch (e) {
+        error = e.toString();
+      }
+    }
+    store.removeFavorite(status.id);
+    repo.localFavoriteIds.remove(status.id);
+    repo.favoritesVersion++;
+    if (!mounted) return;
+    setState(() {
+      _items = [
+        for (final item in _items)
+          if (item.id != status.id) item,
+      ];
+    });
+    showHoboToast(
+      context,
+      error == null ? '已移出收藏' : '本机已移出，微博收藏没删成：$error',
+      level: error == null ? BannerLevel.info : BannerLevel.warning,
+    );
   }
 }
 

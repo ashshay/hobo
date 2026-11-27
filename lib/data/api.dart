@@ -138,15 +138,16 @@ class Api {
   /// 部分 weibo.com 的 ajax 接口拒绝移动端 Referer，这里按桌面浏览器的方式签名。
   static Future<Map<String, dynamic>> getDesktop(
     String target,
-    String? cookie,
-  ) {
+    String? cookie, {
+    String referer = 'https://weibo.com/',
+  }) {
     return _request(
       target,
       cookie: cookie,
       headers: {
         'User-Agent': desktopUa,
         'Accept': 'application/json, text/plain, */*',
-        'Referer': 'https://weibo.com/',
+        'Referer': referer,
         'X-Requested-With': 'XMLHttpRequest',
         if (cookie != null && cookie.isNotEmpty) 'Cookie': cookie,
       },
@@ -158,6 +159,8 @@ class Api {
     String body, {
     String? cookie,
     String? xsrfToken,
+    /// 收藏这类接口按来源页校验，`weibo.com/` 不够，得是 `weibo.com/fav`。
+    String referer = 'https://weibo.com/',
   }) {
     return _request(
       target,
@@ -167,7 +170,7 @@ class Api {
       headers: {
         'User-Agent': desktopUa,
         'Accept': 'application/json, text/plain, */*',
-        'Referer': 'https://weibo.com/',
+        'Referer': referer,
         'Origin': 'https://weibo.com',
         'X-Requested-With': 'XMLHttpRequest',
         'Content-Type': 'application/json; charset=utf-8',

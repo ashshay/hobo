@@ -77,6 +77,28 @@ enum ImageBrowseQuality {
   }
 }
 
+/// 评论区排版。
+///
+/// [card] 是原来的楼层卡片；[flat] 照 Bifu 的图一样式做——不要卡片底，
+/// 左头像 + 右侧正文，时间和赞/回复落在同一行，条目之间只留间距。
+enum CommentStyle {
+  card('card', '卡片式', '一条评论一个圆角卡片'),
+  flat('flat', '非卡片式', '图一样式，只有头像和间距');
+
+  const CommentStyle(this.key, this.label, this.summary);
+
+  final String key;
+  final String label;
+  final String summary;
+
+  static CommentStyle fromKey(String? key) {
+    for (final value in values) {
+      if (value.key == key) return value;
+    }
+    return card;
+  }
+}
+
 class AccentPreset {
   const AccentPreset(this.label, this.argb);
 
@@ -245,6 +267,12 @@ class Settings extends ChangeNotifier {
   double _dockRefractionAmount = defaultDockRefractionAmount;
   bool _monetCards = false;
   bool _confirmLike = false;
+
+  /// 评论区排版：卡片式（旧）或非卡片式（照 Bifu 的图一样式）。
+  CommentStyle _commentStyle = CommentStyle.card;
+
+  /// 收藏同步到微博：点收藏时顺手写进微博收藏夹（网页版也看得到）；关掉退回纯本机星标。
+  bool _favoriteSync = true;
   bool _quickSwitchAccount = true;
   bool _profileTabAvatar = true;
   bool _reverseBrowse = false;
@@ -309,6 +337,8 @@ class Settings extends ChangeNotifier {
     );
     _monetCards = _prefs.getBool('monet_cards') ?? false;
     _confirmLike = _prefs.getBool('confirm_like') ?? false;
+    _commentStyle = CommentStyle.fromKey(_prefs.getString('comment_style'));
+    _favoriteSync = _prefs.getBool('favorite_sync') ?? true;
     _quickSwitchAccount = _prefs.getBool('quick_switch_account') ?? true;
     _profileTabAvatar = _prefs.getBool('profile_tab_avatar') ?? true;
     _reverseBrowse = _prefs.getBool('reverse_browse') ?? false;
@@ -359,6 +389,8 @@ class Settings extends ChangeNotifier {
   /// 卡片背景是否也跟随壁纸取色（Monet 色调）。
   bool get monetCards => _monetCards;
   bool get confirmLike => _confirmLike;
+  CommentStyle get commentStyle => _commentStyle;
+  bool get favoriteSync => _favoriteSync;
   bool get quickSwitchAccount => _quickSwitchAccount;
   bool get profileTabAvatar => _profileTabAvatar;
   bool get reverseBrowse => _reverseBrowse;
@@ -542,6 +574,19 @@ class Settings extends ChangeNotifier {
   void applyConfirmLike(bool value) {
     _confirmLike = value;
     _prefs.setBool('confirm_like', value);
+    notifyListeners();
+  }
+
+  void applyFavoriteSync(bool value) {
+    _favoriteSync = value;
+    _prefs.setBool('favorite_sync', value);
+    notifyListeners();
+  }
+
+  void applyCommentStyle(CommentStyle value) {
+    if (_commentStyle == value) return;
+    _commentStyle = value;
+    _prefs.setString('comment_style', value.key);
     notifyListeners();
   }
 

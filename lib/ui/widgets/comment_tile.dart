@@ -3,6 +3,7 @@ import 'package:prism_ui/icons/icons.dart';
 import 'package:prism_ui/prism_ui.dart';
 
 import '../../data/models.dart';
+import '../../data/settings.dart';
 import 'common.dart';
 import 'glyphs.dart';
 import 'press_scale.dart';
@@ -30,6 +31,8 @@ class CommentTile extends StatelessWidget {
     this.onOpenReplies,
     this.onLongPress,
     this.nested = false,
+    this.style = CommentStyle.card,
+    this.showDivider = false,
   });
 
   final Comment comment;
@@ -52,21 +55,19 @@ class CommentTile extends StatelessWidget {
   final VoidCallback? onLongPress;
   final bool nested;
 
+  /// 一级评论的排版；楼中楼里的单条回复固定用小卡片。
+  final CommentStyle style;
+
+  /// 非卡片式下是否在底部拉一条浅色分隔线（列表里除最后一条都给 true）。
+  final bool showDivider;
+
   bool get _isAuthor =>
       authorId.isNotEmpty && comment.user?.id == authorId;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = context.colorScheme;
-    final user = comment.user;
-    final meta = _metaText();
-    final nameStyle = AppTextStyle.subheadline
-        .of(context, emphasized: true)
-        .copyWith(
-          fontSize: nested ? 14 : 15,
-          color: scheme.onSurface,
-        );
-
+    // 楼中楼里的单条回复保持原来的小卡片，只有一级评论跟随样式设置。
+    if (style == CommentStyle.flat && !nested) return _buildFlat(context);
     return Padding(
       padding: EdgeInsets.only(bottom: nested ? 8 : 10),
       child: HoboCard(
@@ -83,132 +84,247 @@ class CommentTile extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Avatar(
-                  url: user?.avatar ?? '',
-                  size: nested ? 30 : 36,
-                  onTap: user == null ? null : () => onUser?.call(user),
-                ),
+                _avatar(context),
                 const SizedBox(width: 10),
+                Expanded(child: _nameRow(context, showMeta: true)),
+              ],
+            ),
+            SizedBox(height: nested ? 6 : 8),
+            _content(context),
+            const SizedBox(height: 4),
+            _actions(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 非卡片式：照 Bifu 的图一样式——左头像、右侧昵称/正文/时间，末尾一行「时间 · 赞 · 回复」。
+  /// [showDivider] 是列表给的：除了最后一条，底下拉一条浅色分隔线代替卡片边界。
+  Widget _buildFlat(BuildContext context) {
+    final scheme = context.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(0, 2, 0, showDivider ? 14 : 16),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onLongPress: onLongPress,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _avatar(context),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: GestureDetector(
-                    onTap: user == null ? null : () => onUser?.call(user),
-                    behavior: HitTestBehavior.opaque,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                user?.name.isNotEmpty == true
-                                    ? user!.name
-                                    : '评论',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: nameStyle,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _nameRow(context, showMeta: false),
+                      const SizedBox(height: 4),
+                      _content(context),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _metaText(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyle.caption1.of(context).copyWith(
+                                fontSize: 11.5,
+                                color: scheme.onSurfaceVariant,
                               ),
-                            ),
-                            if (user?.verified == true) ...[
-                              const SizedBox(width: 4),
-                              const VerifiedBadge(size: 13),
-                            ],
-                            if (user != null &&
-                                user.membership != Membership.none) ...[
-                              const SizedBox(width: 4),
-                              MemberBadge(
-                                svip: user.membership == Membership.svip,
-                              ),
-                            ],
-                            if (_isAuthor) ...[
-                              const SizedBox(width: 6),
-                              const _AuthorBadge(),
-                            ],
-                          ],
-                        ),
-                        if (meta.isNotEmpty) ...[
-                          const SizedBox(height: 3),
-                          Text(
-                            meta,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyle.caption1.of(context).copyWith(
-                              fontSize: 11.5,
-                              color: scheme.onSurfaceVariant,
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          _CommentAction(
+                            glyph: HoboGlyphs.like,
+                            label: comment.likes > 0 ? '${comment.likes}' : '赞',
+                            active: comment.liked,
+                            activeColor: scheme.error,
+                            onTap: onLike,
+                          ),
+                          const SizedBox(width: 2),
+                          _CommentAction(
+                            glyph: HoboGlyphs.comment,
+                            label: '回复',
+                            onTap: onReply,
+                          ),
                         ],
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            SizedBox(height: nested ? 6 : 8),
-            WeiboText(
-              html: comment.textHtml,
-              style: AppTextStyle.body.of(context).copyWith(
-                fontSize: nested ? 14 : 14.5,
-                height: 1.42,
-                color: scheme.onSurface,
-              ),
-              onLink: onLink,
-              maxLines: 40,
+          ),
+        ),
+        if (showDivider)
+          Container(
+            key: const ValueKey('comment-divider'),
+            height: 0.5,
+            color: scheme.outlineVariant.withValues(alpha: 0.45),
+          ),
+      ],
+    );
+  }
+
+  Widget _avatar(BuildContext context) {
+    final user = comment.user;
+    final size = nested ? 30.0 : 36.0;
+    final url = user?.avatar ?? '';
+    // 没头像的账号（以及设置里的预览样例）给一颗首字圆片，别留一个空洞。
+    final Widget avatar = url.isEmpty
+        ? Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            decoration: ShapeDecoration(
+              color: context.colorScheme.surfaceContainerHighest,
+              shape: AppShape.full,
             ),
-            if (comment.pics.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              // 评论配图比正文小一号，长按也能存原图。
-              PicGrid(
-                pics: comment.pics,
-                heroScope: comment.id.isNotEmpty ? 'c:${comment.id}' : null,
-                onOpen: onOpenImage,
-                onLongPress: onLongPressImage,
-                hero: comment.id.isNotEmpty,
-                maxWidthFactor: nested ? 0.6 : 0.78,
+            child: Text(
+              user != null && user.name.isNotEmpty
+                  ? user.name.substring(0, 1)
+                  : '评',
+              style: TextStyle(
+                fontSize: size * 0.4,
+                fontWeight: FontWeight.w600,
+                color: context.colorScheme.onSurfaceVariant,
               ),
-            ],
-            if (!nested && comment.reply != null) ...[
-              const SizedBox(height: 8),
-              WeiboText(
-                html: _replyHtml(comment.reply!),
-                maxLines: 3,
-                onLink: onLink,
-                style: AppTextStyle.footnote.of(context).copyWith(
-                  fontSize: 12.5,
-                  height: 1.4,
-                  color: scheme.onSurfaceVariant,
+            ),
+          )
+        : Avatar(url: url, size: size);
+    if (user == null) return avatar;
+    return GestureDetector(onTap: () => onUser?.call(user), child: avatar);
+  }
+
+  Widget _nameRow(BuildContext context, {required bool showMeta}) {
+    final scheme = context.colorScheme;
+    final user = comment.user;
+    final meta = _metaText();
+    final nameStyle = AppTextStyle.subheadline
+        .of(context, emphasized: true)
+        .copyWith(fontSize: nested ? 14 : 15, color: scheme.onSurface);
+    return GestureDetector(
+      onTap: user == null ? null : () => onUser?.call(user),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  user?.name.isNotEmpty == true ? user!.name : '评论',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: nameStyle,
                 ),
               ),
-            ],
-            if (!nested && comment.replies.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              _ReplyBlock(
-                replies: comment.replies,
-                total: comment.replyCount,
-                authorId: authorId,
-                onOpenReplies: onOpenReplies,
-              ),
-            ],
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                _CommentAction(
-                  glyph: HoboGlyphs.like,
-                  label: comment.likes > 0 ? '${comment.likes}' : '赞',
-                  active: comment.liked,
-                  activeColor: scheme.error,
-                  onTap: onLike,
-                ),
-                const SizedBox(width: 10),
-                _CommentAction(
-                  glyph: HoboGlyphs.comment,
-                  label: '回复',
-                  onTap: onReply,
-                ),
+              if (user?.verified == true) ...[
+                const SizedBox(width: 4),
+                const VerifiedBadge(size: 13),
               ],
+              if (user != null && user.membership != Membership.none) ...[
+                const SizedBox(width: 4),
+                MemberBadge(svip: user.membership == Membership.svip),
+              ],
+              if (_isAuthor) ...[
+                const SizedBox(width: 6),
+                const _AuthorBadge(),
+              ],
+            ],
+          ),
+          if (showMeta && meta.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(
+              meta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyle.caption1.of(context).copyWith(
+                fontSize: 11.5,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ],
-        ),
+        ],
       ),
+    );
+  }
+
+  Widget _content(BuildContext context) {
+    final scheme = context.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        WeiboText(
+          html: comment.textHtml,
+          style: AppTextStyle.body.of(context).copyWith(
+            fontSize: nested ? 14 : 14.5,
+            height: 1.42,
+            color: scheme.onSurface,
+          ),
+          onLink: onLink,
+          maxLines: 40,
+        ),
+        if (comment.pics.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          // 评论配图比正文小一号，长按也能存原图。
+          PicGrid(
+            pics: comment.pics,
+            heroScope: comment.id.isNotEmpty ? 'c:${comment.id}' : null,
+            onOpen: onOpenImage,
+            onLongPress: onLongPressImage,
+            hero: comment.id.isNotEmpty,
+            maxWidthFactor: nested ? 0.6 : 0.78,
+          ),
+        ],
+        if (!nested && comment.reply != null) ...[
+          const SizedBox(height: 8),
+          WeiboText(
+            html: _replyHtml(comment.reply!),
+            maxLines: 3,
+            onLink: onLink,
+            style: AppTextStyle.footnote.of(context).copyWith(
+              fontSize: 12.5,
+              height: 1.4,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        if (!nested && comment.replies.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _ReplyBlock(
+            replies: comment.replies,
+            total: comment.replyCount,
+            authorId: authorId,
+            onOpenReplies: onOpenReplies,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _actions(BuildContext context) {
+    final scheme = context.colorScheme;
+    return Row(
+      children: [
+        _CommentAction(
+          glyph: HoboGlyphs.like,
+          label: comment.likes > 0 ? '${comment.likes}' : '赞',
+          active: comment.liked,
+          activeColor: scheme.error,
+          onTap: onLike,
+        ),
+        const SizedBox(width: 10),
+        _CommentAction(
+          glyph: HoboGlyphs.comment,
+          label: '回复',
+          onTap: onReply,
+        ),
+      ],
     );
   }
 
@@ -312,6 +428,14 @@ class _ReplyBlock extends StatelessWidget {
         builder: (context) {
           final scheme = context.colorScheme;
           final fill = context.raisedSurfaceLevel.colorOf(scheme);
+          final bodyStyle = AppTextStyle.subheadline.of(context).copyWith(
+            fontSize: 14,
+            height: 1.42,
+            color: scheme.onSurface,
+          );
+          final nameStyle = AppTextStyle.subheadline
+              .of(context, emphasized: true)
+              .copyWith(fontSize: 14, height: 1.42, color: scheme.primary);
           // 撑满正文宽度：块里是几行长短不一的回复，按内容收缩的话每层卡片
           // 宽窄都不一样，一列看下来像没对齐。
           return SizedBox(
@@ -323,76 +447,58 @@ class _ReplyBlock extends StatelessWidget {
               childFills: true,
               onPressed: onOpenReplies,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+                padding: const EdgeInsets.all(10),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final reply in replies.take(3))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 5),
+                    for (var i = 0; i < replies.take(3).length; i++) ...[
+                      if (i > 0) const SizedBox(height: 6),
+                      SizedBox(
+                        width: double.infinity,
                         child: Text.rich(
                           TextSpan(
                             children: [
                               TextSpan(
-                                text: reply.user?.name ?? '',
-                                style: TextStyle(
-                                  color: scheme.primary,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                text: replies[i].user?.name ?? '',
+                                style: nameStyle,
                               ),
                               if (authorId.isNotEmpty &&
-                                  reply.user?.id == authorId)
+                                  replies[i].user?.id == authorId)
                                 TextSpan(
-                                  text: ' 博主',
-                                  style: TextStyle(
+                                  text: ' 楼主',
+                                  style: nameStyle.copyWith(fontSize: 11.5),
+                                ),
+                              if (replies[i].reply?.user?.name.isNotEmpty == true)
+                                TextSpan(
+                                  text: ' 回复 ${replies[i].reply!.user!.name}',
+                                  style: bodyStyle.copyWith(
                                     color: scheme.onSurfaceVariant,
-                                    fontSize: 11,
                                   ),
                                 ),
+                              TextSpan(text: '：', style: bodyStyle),
                               TextSpan(
-                                text: '：${reply.plainText}',
-                                style: TextStyle(
-                                  color: scheme.onSurfaceVariant,
-                                ),
+                                text: replies[i].plainText,
+                                style: bodyStyle,
                               ),
                             ],
                           ),
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.start,
-                          style: AppTextStyle.footnote.of(context).copyWith(
-                            fontSize: 12.5,
-                            height: 1.45,
-                          ),
                         ),
                       ),
-                    if (total > replies.length || replies.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              replies.isEmpty
-                                  ? '查看 $total 条回复'
-                                  : '查看全部 $total 条回复',
-                              style: AppTextStyle.caption1
-                                  .of(context)
-                                  .copyWith(
-                                    fontSize: 12.5,
-                                    color: scheme.primary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                            const SizedBox(width: 2),
-                            GlyphIcon(
-                              Glyphs.chevronForward,
-                              size: 13,
-                              color: scheme.primary,
-                            ),
-                          ],
-                        ),
+                    ],
+                    if (total > replies.take(3).length || replies.isEmpty) ...[
+                      if (replies.isNotEmpty) const SizedBox(height: 6),
+                      Text(
+                        replies.isEmpty
+                            ? '查看 $total 条回复'
+                            : '查看全部 $total 条回复',
+                        style: AppTextStyle.footnote
+                            .of(context, emphasized: true)
+                            .copyWith(color: scheme.primary),
                       ),
+                    ],
                   ],
                 ),
               ),

@@ -12,6 +12,7 @@ import '../../data/store.dart';
 import '../../data/update.dart';
 import '../routes.dart';
 import '../widgets/app_icon.dart';
+import '../widgets/comment_tile.dart';
 import '../widgets/common.dart';
 import '../widgets/glyphs.dart';
 import '../widgets/remote_image.dart';
@@ -190,6 +191,15 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               HoboRow(
+                title: '收藏同步到微博',
+                subtitle: '收藏时同时写进微博收藏夹，网页版也看得到',
+                leading: const GlyphIcon(HoboGlyphs.star, size: 20),
+                trailing: Switch(
+                  value: settings.favoriteSync,
+                  onChanged: settings.applyFavoriteSync,
+                ),
+              ),
+              HoboRow(
                 title: '底栏「我」显示头像',
                 leading: const GlyphIcon(HoboGlyphs.person, size: 20),
                 trailing: Switch(
@@ -207,6 +217,22 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
+          // 评论区样式 + 预览：预览渲染的就是详情页那个 CommentTile，改完立刻看得到。
+          HoboSection(
+            title: '评论区',
+            children: [
+              HoboRow(
+                title: '样式',
+                subtitle: settings.commentStyle.summary,
+                leading: const GlyphIcon(HoboGlyphs.comment, size: 20),
+                trailing: CommentStyleSwitch(
+                  value: settings.commentStyle,
+                  onChanged: settings.applyCommentStyle,
+                ),
+              ),
+            ],
+          ),
+          CommentStylePreview(style: settings.commentStyle),
           HoboSection(
             title: '更新',
             children: [
@@ -930,6 +956,111 @@ class _AccentDialogState extends State<_AccentDialog> {
               hintText: '自定义 #RRGGBB',
             ),
             onSubmitted: (_) => _applyCustom(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 评论区样式的两段式切换：选中那颗用强调色填底。
+class CommentStyleSwitch extends StatelessWidget {
+  const CommentStyleSwitch({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final CommentStyle value;
+  final ValueChanged<CommentStyle> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: ShapeDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        shape: AppShape.full,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final option in CommentStyle.values)
+            PressSurface(
+              fill: option == value ? scheme.primary : const Color(0x00000000),
+              shape: AppShape.full,
+              onPressed: () => onChanged(option),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 4,
+                ),
+                child: Text(
+                  option.label,
+                  style: AppTextStyle.caption1.of(context).copyWith(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: option == value
+                        ? scheme.onPrimary
+                        : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 评论区样式预览：渲染的就是详情页那个 [CommentTile]，样例文字和博主固定。
+class CommentStylePreview extends StatelessWidget {
+  const CommentStylePreview({super.key, required this.style});
+
+  final CommentStyle style;
+
+  static const _author = User(id: 'preview-author', name: '深思');
+  static const _comment = Comment(
+    id: 'preview-comment',
+    textHtml: '生命宇宙以及一切',
+    user: _author,
+    createdAt: '刚刚',
+    likes: 42,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              children: [
+                Text(
+                  '预览',
+                  style: AppTextStyle.footnote
+                      .of(context, emphasized: true)
+                      .copyWith(color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  style.label,
+                  style: AppTextStyle.caption1
+                      .of(context)
+                      .copyWith(color: scheme.primary),
+                ),
+              ],
+            ),
+          ),
+          CommentTile(
+            comment: _comment,
+            authorId: _author.id,
+            style: style,
           ),
         ],
       ),

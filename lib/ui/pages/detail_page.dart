@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/models.dart';
 import '../../data/repo.dart';
+import '../../data/settings.dart';
 import '../../data/store.dart';
 import '../routes.dart';
 import '../widgets/comment_tile.dart';
@@ -179,16 +180,17 @@ class _DetailPageState extends State<DetailPage> {
     final status = _status;
     if (status == null) return;
     final repo = context.read<Repo>();
-    final next = !status.favorited;
-    try {
-      await repo.favorite(status.id, favorited: !next);
-      if (!mounted) return;
-      setState(() => _status = status.copyWith(favorited: next));
-      showHoboToast(context, next ? '已收藏' : '已取消收藏');
-    } on Object catch (e) {
-      if (!mounted) return;
-      showHoboToast(context, e.toString(), level: BannerLevel.error);
-    }
+    // 本机先落，界面立刻有反馈；登录态下再写微博收藏夹，失败只提示不回滚。
+    final result = await repo.toggleFavorite(status);
+    if (!mounted) return;
+    setState(() => _status = status.copyWith(favorited: result.favorited));
+    final label = result.favorited ? '已收藏' : '已取消收藏';
+    final error = result.syncError;
+    showHoboToast(
+      context,
+      error == null ? label : '$label，微博收藏失败：$error',
+      level: error == null ? BannerLevel.info : BannerLevel.warning,
+    );
   }
 
   Future<void> _comment() async {
@@ -401,6 +403,8 @@ class _DetailPageState extends State<DetailPage> {
               comment: _comments[i],
               floor: i + 1,
               authorId: status.user?.id ?? '',
+              style: context.watch<Settings>().commentStyle,
+              showDivider: i != _comments.length - 1,
               onReply: () => _reply(_comments[i]),
               onLike: () => _likeComment(_comments[i]),
               onUser: (user) => openUser(context, user),

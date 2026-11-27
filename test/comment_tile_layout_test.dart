@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hobo/data/models.dart';
+import 'package:hobo/data/settings.dart';
 import 'package:hobo/ui/widgets/comment_tile.dart';
 import 'package:hobo/ui/widgets/common.dart';
 
@@ -57,5 +58,43 @@ void main() {
 
     final short = find.textContaining('天才');
     expect(tester.getRect(short).left, closeTo(rect.left, 0.5));
+  });
+
+  testWidgets('非卡片式：不要卡片底，条目之间拉一条浅色分隔线', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        CommentTile(
+          comment: _comment(),
+          style: CommentStyle.flat,
+          showDivider: true,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(HoboCard), findsNothing);
+    expect(find.byKey(const ValueKey('comment-divider')), findsOneWidget);
+    // 楼中楼仍是块状预览，标题行照 Bifu 的「昵称：正文」。
+    expect(find.textContaining('查看全部 7 条回复'), findsOneWidget);
+    expect(find.textContaining('一根筋两头堵'), findsOneWidget);
+    // 时间/来源落在正文右下那一行。
+    expect(find.textContaining('福建'), findsOneWidget);
+  });
+
+  testWidgets('非卡片式最后一条不画分隔线', (tester) async {
+    await tester.pumpWidget(
+      _host(CommentTile(comment: _comment(), style: CommentStyle.flat)),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('comment-divider')), findsNothing);
+  });
+
+  testWidgets('卡片式默认不带分隔线', (tester) async {
+    await tester.pumpWidget(_host(CommentTile(comment: _comment())));
+    await tester.pump();
+
+    expect(find.byType(HoboCard), findsOneWidget);
+    expect(find.byKey(const ValueKey('comment-divider')), findsNothing);
   });
 }

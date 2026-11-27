@@ -44,6 +44,30 @@ const _tagCursorEnd = '';
 const _guestBlocked = '纯本地模式看不了这里，登录后可用';
 const _loginRequired = '纯本地模式不能这样操作，登录后可用';
 
+/// 收藏的写接口在 weibo.com 的 ajax 上，不在 m.weibo.cn：
+/// `m.weibo.cn/api/favorites/create|destroy` 一律 404（Cobo 1.1.19 当年撞的就是这堵墙）。
+/// `destoryFavorites` 的拼写是微博自己写错的，改成「正确」的反而 404。
+const _favoriteCreateUrl = 'https://weibo.com/ajax/statuses/createFavorites';
+const _favoriteDestroyUrl = 'https://weibo.com/ajax/statuses/destoryFavorites';
+
+/// 这两个接口按来源页校验，`weibo.com/` 不够，必须是收藏页。
+const _favoriteReferer = 'https://weibo.com/fav';
+
+/// m.weibo.cn「我的收藏」容器：网页版 / 官方客户端里真正收藏过的微博。
+/// 收藏列表：`containerid=230267` 实测只回「这里还没有内容」，现在走 weibo.com 的 ajax。
+const _favoriteListUrl = 'https://weibo.com/ajax/favorites/all_fav';
+
+/// 收藏夹一页固定 20 条，拿满就说明后面还有。
+const _favoritePageSize = 20;
+
+/// 「收藏」按钮的结果：[favorited] 是本地状态，[syncError] 非空说明微博收藏夹那次没写成功。
+class FavoriteToggle {
+  const FavoriteToggle(this.favorited, [this.syncError]);
+
+  final bool favorited;
+  final String? syncError;
+}
+
 /// 微博搜索结果的排序：综合 `type=1`、实时 `type=61`、热门 `type=60`。
 enum SearchSort {
   comprehensive('综合', 1),
@@ -119,6 +143,9 @@ class Repo extends ChangeNotifier {
   /// 全局本地收藏状态：跨账号与纯本地模式共用，切号与登出都保留。
   final Map<String, bool> localFavoriteIds = {};
   int favoritesVersion = 0;
+
+  /// 微博收藏夹那一侧的版本号：每写成功一次 +1，收藏页据此强制重拉。
+  int onlineFavoritesVersion = 0;
 
   final Map<String, bool> deletedStatusIds = {};
   int deletedVersion = 0;
@@ -1662,6 +1689,7 @@ class Repo extends ChangeNotifier {
     }
   }
 
+  /// 只动本机那份星标（换机恢复、纯本地模式用）；界面上的收藏按钮走 [toggleFavorite]。
   Future<bool> favorite(String id, {required bool favorited}) async {
     if (favorited) {
       store.removeFavorite(id);
@@ -1677,6 +1705,166 @@ class Repo extends ChangeNotifier {
     favoritesVersion++;
     _notify();
     return true;
+  }
+
+  /// 桌面端 cookie：`XSRF-TOKEN` 只种在 `.weibo.com` 下面，所以按 weibo.com 拼。
+  String _desktopCookie() {
+    final active = session;
+    if (active == null || !active.loggedIn) throw ApiException(_loginRequired);
+    final merged = CookieVault.desktopAuthHeader(active.cookies, 'weibo.com');
+    return merged.isEmpty ? active.cookie : merged;
+  }
+
+  String _desktopXsrf() {
+    final active = session;
+    if (active == null) return '';
+    final raw =
+        CookieVault.cookieValue(active.cookies, 'weibo.com', 'XSRF-TOKEN') ?? '';
+    if (raw.isEmpty) return '';
+    // cookie 里存的是 URL 编码过的，请求头要的是解码后的原值。
+    try {
+      return Uri.decodeComponent(raw);
+    } on Object {
+      return raw;
+    }
+  }
+
+  /// weibo.com 的 `XSRF-TOKEN` 不见得种着（网页登录过的会话也常常只有 SUB/SUBP）。
+  /// 缺了就先去打一次网页首页，让服务端用 `Set-Cookie` 把它发下来，[Repo._absorbCookies]
+  /// 会顺手并进会话。
+  Future<void> _warmDesktopXsrf(String cookie) async {
+    try {
+      await Api.getHtml('https://weibo.com/', cookie);
+    } on Object {
+      // 种不下来就让写接口自己回 403，界面会把原因带出来。
+    }
+  }
+
+  /// 收藏接口失败时把服务端那句话捞出来：业务错误也是 HTTP 400 + `{"ok":0,"message":"…"}`，
+  /// 直接甩一句 HTTP 400 谁也看不懂。
+  String _favoriteError(Map<String, dynamic>? root, String fallback) {
+    final message = root?.str('message') ?? '';
+    if (message.isNotEmpty) return message;
+    final msg = root?.str('msg') ?? '';
+    return msg.isEmpty ? fallback : msg;
+  }
+
+  Map<String, dynamic>? _decodeBody(String body) {
+    if (body.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        return {for (final e in decoded.entries) e.key.toString(): e.value};
+      }
+    } on Object {
+      // 不是 JSON 就算了，错误提示退回兜底文案。
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>> _postFavorite(
+    String id, {
+    required bool favorited,
+  }) {
+    return Api.postDesktopJson(
+      favorited ? _favoriteCreateUrl : _favoriteDestroyUrl,
+      jsonEncode({'id': id}),
+      cookie: _desktopCookie(),
+      xsrfToken: _desktopXsrf(),
+      referer: _favoriteReferer,
+    );
+  }
+
+  /// 收藏 / 取消收藏一次，直接落到微博的收藏夹（不是本机那份星标）。
+  ///
+  /// 第一次写如果被 400/403 挡回来，先补一次 XSRF 令牌再重试一遍：网页登录留下的
+  /// 会话里常常没有这个 cookie，第一次写大概率是「令牌还没种下来」。
+  Future<bool> setOnlineFavorite(String id, {required bool favorited}) async {
+    if (id.isEmpty) throw ApiException('微博不存在');
+    var warmed = _desktopXsrf().isNotEmpty;
+    if (!warmed) {
+      await _warmDesktopXsrf(_desktopCookie());
+      warmed = true;
+    }
+    while (true) {
+      try {
+        final root = await _postFavorite(id, favorited: favorited);
+        if (root.intOf('ok', 0) == 1 || root.has('data')) {
+          Api.cache?.clear();
+          onlineFavoritesVersion++;
+          _notify();
+          return true;
+        }
+        throw ApiException(_favoriteError(root, '收藏失败'));
+      } on ApiHttpException catch (e) {
+        // 令牌缺失/过期时服务端回 400/403；补一次再试，别让用户点两下。
+        if (warmed) {
+          throw ApiException(_favoriteError(_decodeBody(e.body), '收藏失败'));
+        }
+        warmed = true;
+        await _warmDesktopXsrf(_desktopCookie());
+      }
+    }
+  }
+
+  /// 「收藏」按钮的完整动作：先落本机（界面立刻有反馈），登录态下再写一次微博收藏夹。
+  ///
+  /// 写失败不回滚本机：用户点的是收藏，本机那份不该因为服务端拦了一下就丢掉；
+  /// 失败原因交给界面提示，同时说明「本机已经收下了」。
+  Future<FavoriteToggle> toggleFavorite(Status status) async {
+    final favorited = toggleLocalFavorite(status);
+    if (!_shouldSyncFavorites()) return FavoriteToggle(favorited);
+    try {
+      await setOnlineFavorite(status.id, favorited: favorited);
+      return FavoriteToggle(favorited);
+    } on Object catch (e) {
+      final message = e.toString().trim();
+      return FavoriteToggle(favorited, message.isEmpty ? '收藏失败' : message);
+    }
+  }
+
+  /// 纯本地模式、或设置里关掉了同步时，收藏只写本机。
+  bool _shouldSyncFavorites() =>
+      (session?.loggedIn ?? false) && settings.favoriteSync;
+
+  /// 微博收藏夹（在线收藏）。和 [favorites] 那份本机星标不是一回事：这里拿的是
+  /// 网页版 / 官方客户端里真正收藏过的微博。
+  ///
+  /// 走 `weibo.com/ajax/favorites/all_fav`：m.weibo.cn 的 `containerid=230267` 实测只回
+  /// 「这里还没有内容」，它已经不是收藏夹了。分页按 `page` 走，一页 20 条。
+  ///
+  /// 拉回来的条目顺手镜像进本机表，这样卡片上的星标和「取消收藏」对得上；
+  /// 这里**不要**动 [favoritesVersion]，否则收藏页会因为自己的刷新而无限重拉。
+  Future<FeedPage> onlineFavorites({String? cursor, bool force = false}) async {
+    if (session?.loggedIn != true) throw ApiException(_loginRequired);
+    final page = int.tryParse(cursor ?? '') ?? 1;
+    final uid = await ownUid();
+    final root = await Api.getDesktop(
+      Api.url(_favoriteListUrl, {'uid': uid, 'page': '$page'}),
+      _desktopCookie(),
+      referer: _favoriteReferer,
+    );
+    final arr = root.arr('data');
+    if (arr == null) throw ApiException(_favoriteError(root, '收藏没拉到'));
+    final items = <Status>[];
+    for (final entry in arr) {
+      final o = jObj(entry);
+      if (o == null) continue;
+      final status = Status.from(o.obj('mblog') ?? o);
+      if (status == null) continue;
+      items.add(status.copyWith(favorited: true));
+    }
+    if (items.isNotEmpty) {
+      store.addFavorites(items);
+      // 星标读的是这张内存表，镜像完顺手填上，卡片才不至于显示成「未收藏」。
+      for (final status in items) {
+        localFavoriteIds[status.id] = true;
+      }
+    }
+    return FeedPage(
+      items,
+      items.length >= _favoritePageSize ? '${page + 1}' : null,
+    );
   }
 
   Future<bool> follow(String uid, {required bool follow}) async {
