@@ -1,6 +1,89 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hobo/data/models.dart';
+import 'package:hobo/ui/widgets/capsule.dart';
+import 'package:hobo/ui/widgets/pager.dart';
 import 'package:hobo/ui/widgets/profile_tabs.dart';
+
+class _ProfileTabBarHost extends StatefulWidget {
+  const _ProfileTabBarHost({
+    required this.width,
+    required this.weiboCount,
+    required this.onReady,
+  });
+
+  final double width;
+  final int weiboCount;
+  final ValueChanged<_ProfileTabBarHostState> onReady;
+
+  @override
+  State<_ProfileTabBarHost> createState() => _ProfileTabBarHostState();
+}
+
+class _ProfileTabBarHostState extends State<_ProfileTabBarHost>
+    with TickerProviderStateMixin {
+  ProfileTab selected = ProfileTab.weibo;
+  late final HoboPagerController controller = HoboPagerController(
+    vsync: this,
+    initialPage: selected.index,
+    count: ProfileTab.values.length,
+  );
+  final List<ProfileTab> changes = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => widget.onReady(this));
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MediaQuery(
+      data: MediaQueryData(size: Size(widget.width, 800)),
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: widget.width,
+            child: ProfileTabBar(
+              selected: selected,
+              weiboCount: widget.weiboCount,
+              pageController: controller,
+              onSelect: (tab) => setState(() {
+                selected = tab;
+                changes.add(tab);
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<_ProfileTabBarHostState> _pumpTabBar(
+  WidgetTester tester, {
+  double width = 393,
+  int weiboCount = 9499,
+}) async {
+  late _ProfileTabBarHostState host;
+  await tester.pumpWidget(
+    _ProfileTabBarHost(
+      width: width,
+      weiboCount: weiboCount,
+      onReady: (state) => host = state,
+    ),
+  );
+  await tester.pump();
+  return host;
+}
 
 Status status(
   String id, {
@@ -135,5 +218,70 @@ void main() {
       'verified_reason': '微博2022最具影响力互联网科技大V',
     });
     expect(user?.verifiedReason, '微博2022最具影响力互联网科技大V');
+  });
+
+  group('ProfileTabBar 胶囊分类条', () {
+    testWidgets('展示五类胶囊并带微博数，点击可弹簧切换', (tester) async {
+      final host = await _pumpTabBar(tester, width: 393, weiboCount: 9499);
+      expect(find.byType(HoboCapsule<ProfileTab>), findsOneWidget);
+      expect(find.text('关于'), findsOneWidget);
+      expect(find.text('微博(9499)'), findsOneWidget);
+      expect(find.text('相册'), findsOneWidget);
+      expect(find.text('精选'), findsOneWidget);
+      expect(find.text('视频'), findsOneWidget);
+      expect(host.controller.page, closeTo(1, 0.01));
+
+      await tester.tap(find.text('相册'));
+      await tester.pumpAndSettle();
+
+      expect(host.selected, ProfileTab.album);
+      expect(host.changes, [ProfileTab.album]);
+      expect(host.controller.page, closeTo(ProfileTab.album.index, 0.01));
+    });
+
+    testWidgets('常规屏宽下可直接按住胶囊滑块拖拽切换分类', (tester) async {
+      final host = await _pumpTabBar(tester, width: 393, weiboCount: 9499);
+      final start = tester.getCenter(find.text('微博(9499)'));
+      final end = tester.getCenter(find.text('相册'));
+
+      final gesture = await tester.startGesture(start);
+      // 超过 kTouchSlop (18px) 触发拖拽，再滑向相邻分段验证实时跟手。
+      await gesture.moveBy(const Offset(20, 0));
+      await tester.pump();
+      await gesture.moveBy(Offset(end.dx - start.dx, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+
+      expect(host.controller.isDragging, isTrue);
+      expect(host.controller.page, greaterThan(1.5));
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(host.selected.index, greaterThan(ProfileTab.weibo.index));
+      expect(host.controller.page, closeTo(host.selected.index, 0.01));
+    });
+
+    testWidgets('窄屏超出宽度时自动切换为可横向滚动且无溢出异常', (tester) async {
+      await _pumpTabBar(tester, width: 260, weiboCount: 106000);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('微博(10.6万)'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(HoboCapsule<ProfileTab>),
+          matching: find.byType(SingleChildScrollView),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.drag(
+        find.byType(HoboCapsule<ProfileTab>),
+        const Offset(-120, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
   });
 }

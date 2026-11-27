@@ -50,7 +50,7 @@
       <div>
         <p class="badge">
           <span class="dot" aria-hidden="true"></span>
-          最新版本 <strong>1.12.0</strong> · build 14
+          最新版本 <strong>1.13.0</strong> · build 15
         </p>
         <h1>微博客户端，<br><span>换个做法</span>。</h1>
         <p class="hero-lead">
@@ -202,7 +202,7 @@
             <p>
               在手机浏览器里打开
               <a href="https://github.com/ashshay/hobo/releases/latest">Releases 页面</a>，
-              点 <code>hobo-1.12.0-arm64.apk</code>。
+              点 <code>hobo-1.13.0-arm64.apk</code>。
             </p>
           </li>
           <li>
@@ -218,7 +218,7 @@
         <aside class="panel">
           <h3>这一版的包</h3>
           <dl class="spec">
-            <dt>版本</dt><dd>1.12.0（versionCode 14）</dd>
+            <dt>版本</dt><dd>1.13.0（versionCode 15）</dd>
             <dt>ABI</dt><dd>arm64-v8a</dd>
             <dt>大小</dt><dd>约 21 MB</dd>
             <dt>minSdk</dt><dd>24（Android 7.0）</dd>
@@ -230,7 +230,7 @@
           </p>
           <h3>用 adb 装</h3>
           <pre class="code"><code><span class="c"># 下载后</span>
-adb install -r hobo-1.12.0-arm64.apk</code></pre>
+adb install -r hobo-1.13.0-arm64.apk</code></pre>
         </aside>
       </div>
     </div>
@@ -245,6 +245,14 @@ adb install -r hobo-1.12.0-arm64.apk</code></pre>
       </div>
 
       <ol class="log">
+        <li>
+          <h3>1.13.0 <time>2026-11-27</time></h3>
+          <ul>
+            <li><strong>个人页分类栏改为可滑动切换胶囊式</strong>：<code>关于 / 微博(N) / 相册 / 精选 / 视频</code> 统一升级为站内同款物理弹簧 <code>HoboCapsule</code>，与下方卡片左右 16dp 齐平，展开态去除上下硬边框，吸顶滚过内容时显现底部细分隔线。</li>
+            <li><strong>胶囊拖拽 + 正文横滑 1:1 弹簧联动</strong>：常规屏宽下五类按文字实际宽度自适应铺满且不截断，支持直接按住胶囊滑块跨不等宽分段拖拽切换（保留果冻拉伸、按压膨胀与端壁压缩），或在正文区左右横滑 1:1 驱动同一条弹簧并同步轻微平移内容；吸顶深滚后切栏各自记忆滚动位置。</li>
+            <li><strong>窄屏 / 大字号自适应横向滚动</strong>：当五段总宽超出可视区域时自动切换为可横向滚动轨道并带两端 20dp 渐隐及选中项居中滚入。</li>
+          </ul>
+        </li>
         <li>
           <h3>1.12.0 <time>2026-11-27</time></h3>
           <ul>

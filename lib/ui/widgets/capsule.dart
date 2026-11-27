@@ -138,6 +138,9 @@ class HoboCapsule<T> extends StatefulWidget {
     this.pageController,
     this.height = 40,
     this.scrollable = false,
+    this.expand = false,
+    this.minSegmentWidth = 64.0,
+    this.segmentHorizontalPadding = 28.0,
     this.padding = const EdgeInsets.all(4),
   });
 
@@ -175,9 +178,18 @@ class HoboCapsule<T> extends StatefulWidget {
 
   final double height;
 
-  /// 段数多、放不下时按内容宽度排布并横向滚动（顶栏栏目用它）。
-  /// 滚动模式下拖动是滚轨道，不再拖滑块。
+  /// 按文字实际宽度排布；总宽超出可视区域时启用横向滚动与两端渐隐，
+  /// 能完整放下时仍支持直接按住胶囊滑块拖拽切换。
   final bool scrollable;
+
+  /// [scrollable] 且所有分段能放进可用宽度时，把剩余宽度均分到各段铺满轨道。
+  final bool expand;
+
+  /// 滚动/自适应模式下单段最小宽度。
+  final double minSegmentWidth;
+
+  /// 滚动/自适应模式下单段文字左右留白总和。
+  final double segmentHorizontalPadding;
 
   final EdgeInsets padding;
 
@@ -193,7 +205,8 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
   final ScrollController _scroll = ScrollController();
 
   bool _dragging = false;
-  double _dragFrom = 0;
+  bool _overflows = false;
+  double _dragOriginX = 0;
   double _dragDistance = 0;
 
   bool get _disableAnimations =>
@@ -295,7 +308,15 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
       _jelly.springTo(kick, HoboCapsule.jellySpring);
     }
     if (controller != null) {
-      controller.goToPage(index, velocity: initialVelocity ?? 0);
+      if (initialVelocity == null &&
+          controller.isAnimating &&
+          (controller.targetPage - target).abs() < 0.01) {
+        return;
+      }
+      controller.goToPage(
+        index,
+        velocity: initialVelocity ?? controller.velocity,
+      );
       return;
     }
     _pos.springTo(
@@ -317,27 +338,74 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
     widget.onChanged(option);
   }
 
-  void _onDragStart(DragStartDetails details) {
-    if (widget.scrollable || widget.segments.length <= 1) return;
+  /// 连续页位置对应的滑块中心 x（兼容等宽与按文字排布的不等宽分段）。
+  double _centerOfPage(double page, List<double> bounds) {
+    final count = bounds.length - 1;
+    if (count <= 0) return 0;
+    if (count == 1) return (bounds[0] + bounds[1]) / 2;
+    final clamped = page.clamp(0.0, count - 1.0);
+    final slot = clamped.floor().clamp(0, count - 2);
+    final frac = clamped - slot;
+    final c0 = (bounds[slot] + bounds[slot + 1]) / 2;
+    final c1 = (bounds[slot + 1] + bounds[slot + 2]) / 2;
+    return lerpDouble(c0, c1, frac)!;
+  }
+
+  /// 轨道内 x 坐标反算连续页位置，超出一头一尾时按端格宽度折算越界量。
+  double _pageForX(double x, List<double> bounds) {
+    final count = bounds.length - 1;
+    if (count <= 1) return 0;
+    final firstCenter = (bounds[0] + bounds[1]) / 2;
+    if (x <= firstCenter) {
+      final span = math.max(1.0, bounds[1] - bounds[0]);
+      return (x - firstCenter) / span;
+    }
+    final lastCenter = (bounds[count - 1] + bounds[count]) / 2;
+    if (x >= lastCenter) {
+      final span = math.max(1.0, bounds[count] - bounds[count - 1]);
+      return (count - 1) + (x - lastCenter) / span;
+    }
+    for (var i = 0; i < count - 1; i++) {
+      final c0 = (bounds[i] + bounds[i + 1]) / 2;
+      final c1 = (bounds[i + 1] + bounds[i + 2]) / 2;
+      if (x <= c1) {
+        return i + (x - c0) / math.max(1.0, c1 - c0);
+      }
+    }
+    return (count - 1).toDouble();
+  }
+
+  double _localStep(double page, List<double> bounds) {
+    final count = bounds.length - 1;
+    if (count <= 1) return math.max(1.0, bounds.isEmpty ? 60.0 : bounds.last);
+    final slot = page.floor().clamp(0, count - 2);
+    final c0 = (bounds[slot] + bounds[slot + 1]) / 2;
+    final c1 = (bounds[slot + 1] + bounds[slot + 2]) / 2;
+    return math.max(1.0, c1 - c0);
+  }
+
+  void _onDragStart(DragStartDetails details, List<double> bounds) {
+    if (_overflows || widget.segments.length <= 1 || bounds.length < 2) return;
     _dragging = true;
-    _dragFrom = _page;
+    _dragOriginX = _centerOfPage(_page, bounds);
     _dragDistance = 0;
+    _pageController?.beginDrag();
     if (!_disableAnimations) {
       _press.springTo(1, HoboCapsule.pressSpring);
     }
   }
 
-  void _onDragUpdate(DragUpdateDetails details, double trackWidth) {
-    if (!_dragging || trackWidth <= 0) return;
+  void _onDragUpdate(DragUpdateDetails details, List<double> bounds) {
+    if (!_dragging || bounds.length < 2 || bounds.last <= 0) return;
     _dragDistance += details.delta.dx;
-    final slot = trackWidth / widget.segments.length;
-    final raw = _dragFrom + _dragDistance / math.max(1.0, slot);
+    final raw = _pageForX(_dragOriginX + _dragDistance, bounds);
     final page = raw < 0
         ? -_rubberBand(-raw, 0.22)
         : raw > _maxPage
         ? _maxPage + _rubberBand(raw - _maxPage, 0.22)
         : raw;
-    final velocity = details.delta.dx * 60 / math.max(1.0, slot);
+    final step = _localStep(raw, bounds);
+    final velocity = details.delta.dx * 60 / step;
     final controller = _pageController;
     if (_disableAnimations) {
       if (controller != null) {
@@ -357,7 +425,7 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
     );
   }
 
-  void _onDragEnd(DragEndDetails details, double trackWidth) {
+  void _onDragEnd(DragEndDetails details, List<double> bounds) {
     if (!_dragging) return;
     _dragging = false;
     if (!_disableAnimations) {
@@ -366,8 +434,8 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
       _press.jumpTo(0);
     }
     final count = widget.segments.length;
-    final slot = trackWidth > 0 ? trackWidth / count : 60.0;
-    final velocity = details.velocity.pixelsPerSecond.dx / math.max(1.0, slot);
+    final step = _localStep(_page, bounds);
+    final velocity = details.velocity.pixelsPerSecond.dx / step;
     final controller = _pageController;
     _jelly.springTo(0, HoboCapsule.jellySpring);
     if (controller != null) {
@@ -377,7 +445,10 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
         limitToNeighbor: false,
       );
       final option = widget.segments[landed].$1;
-      if (option != widget.value) widget.onChanged(option);
+      if (option != widget.value) {
+        HapticFeedback.selectionClick();
+        widget.onChanged(option);
+      }
       return;
     }
     // 用跟手弹簧的「目标」落格：手指已经到了哪一格就落哪一格，
@@ -391,7 +462,10 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
       initialVelocity: velocity.clamp(-14.0, 14.0),
     );
     final option = widget.segments[projected].$1;
-    if (option != widget.value) widget.onChanged(option);
+    if (option != widget.value) {
+      HapticFeedback.selectionClick();
+      widget.onChanged(option);
+    }
   }
 
   void _onDragCancel() {
@@ -445,18 +519,22 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
   List<double> _measureWidths(BuildContext context, TextStyle style) {
     final scaler = MediaQuery.textScalerOf(context);
     final direction = Directionality.of(context);
+    final boldStyle = style.copyWith(fontWeight: FontWeight.w600);
     return [
       for (final (_, label) in widget.segments)
         () {
           final painter = TextPainter(
-            text: TextSpan(text: label, style: style),
+            text: TextSpan(text: label, style: boldStyle),
             textDirection: direction,
             textScaler: scaler,
             maxLines: 1,
           )..layout();
           final width = painter.width;
           painter.dispose();
-          return math.max(64.0, width + 28);
+          return math.max(
+            widget.minSegmentWidth,
+            width + widget.segmentHorizontalPadding,
+          );
         }(),
     ];
   }
@@ -475,16 +553,32 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final widths = widget.scrollable
+        final rawWidths = widget.scrollable
             ? _measureWidths(context, baseStyle)
             : const <double>[];
-        final contentWidth = widths.fold<double>(0, (a, b) => a + b);
+        final rawContentWidth = rawWidths.fold<double>(0, (a, b) => a + b);
         final fallback =
             math.max(120.0, MediaQuery.sizeOf(context).width - 48);
         final maxWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : fallback;
         final innerMax = math.max(0.0, maxWidth - widget.padding.horizontal);
+        final overflows =
+            widget.scrollable && rawContentWidth > innerMax + 0.5;
+        _overflows = overflows;
+        final List<double> widths;
+        if (!widget.scrollable) {
+          widths = const <double>[];
+        } else if (widget.expand &&
+            !overflows &&
+            rawWidths.isNotEmpty &&
+            rawContentWidth < innerMax) {
+          final extra = (innerMax - rawContentWidth) / rawWidths.length;
+          widths = [for (final width in rawWidths) width + extra];
+        } else {
+          widths = rawWidths;
+        }
+        final contentWidth = widths.fold<double>(0, (a, b) => a + b);
         final trackWidth = widget.scrollable
             ? math.min(contentWidth, innerMax)
             : innerMax;
@@ -525,6 +619,7 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
                   trackHeight: trackHeight,
                   widths: widths,
                   baseStyle: baseStyle,
+                  overflows: overflows,
                 ),
               ),
             ),
@@ -541,6 +636,7 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
     required double trackHeight,
     required List<double> widths,
     required TextStyle baseStyle,
+    required bool overflows,
   }) {
     final scheme = context.colorScheme;
     final count = widget.segments.length;
@@ -596,18 +692,17 @@ class _HoboCapsuleState<T> extends State<HoboCapsule<T>>
       ),
     );
 
-    final gesture = GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      dragStartBehavior: DragStartBehavior.down,
-      onHorizontalDragStart: _onDragStart,
-      onHorizontalDragUpdate: (details) =>
-          _onDragUpdate(details, trackWidth),
-      onHorizontalDragEnd: (details) => _onDragEnd(details, trackWidth),
-      onHorizontalDragCancel: _onDragCancel,
-      child: track,
-    );
-
-    if (!widget.scrollable) return gesture;
+    if (!overflows) {
+      return GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        dragStartBehavior: DragStartBehavior.down,
+        onHorizontalDragStart: (details) => _onDragStart(details, bounds),
+        onHorizontalDragUpdate: (details) => _onDragUpdate(details, bounds),
+        onHorizontalDragEnd: (details) => _onDragEnd(details, bounds),
+        onHorizontalDragCancel: _onDragCancel,
+        child: track,
+      );
+    }
     return _EdgedScroll(
       controller: _scroll,
       width: trackWidth,

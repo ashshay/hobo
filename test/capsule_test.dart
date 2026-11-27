@@ -159,5 +159,47 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('自适应模式未超出可视宽度时支持直接按住滑块跨不等宽分段拖拽', (tester) async {
+      var selected = 0;
+      await tester.pumpWidget(
+        StatefulBuilder(
+          builder: (context, setState) => MediaQuery(
+            data: const MediaQueryData(size: Size(400, 600)),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Center(
+                child: SizedBox(
+                  width: 380,
+                  height: 40,
+                  child: HoboCapsule<int>(
+                    segments: const [(0, '关于'), (1, '微博(9499)'), (2, '相册')],
+                    value: selected,
+                    scrollable: true,
+                    minSegmentWidth: 56,
+                    segmentHorizontalPadding: 24,
+                    onChanged: (next) => setState(() => selected = next),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final start = tester.getCenter(find.text('关于'));
+      final target = tester.getCenter(find.text('微博(9499)'));
+      final gesture = await tester.startGesture(start);
+      await gesture.moveBy(const Offset(20, 0));
+      await tester.pump();
+      await gesture.moveBy(Offset(target.dx - start.dx, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(selected, 1);
+    });
   });
 }

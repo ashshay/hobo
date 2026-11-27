@@ -3,6 +3,8 @@ import 'package:prism_ui/prism_ui.dart';
 
 import '../../data/models.dart';
 import '../theme.dart' show formatCount;
+import 'capsule.dart';
+import 'pager.dart';
 
 /// 个人主页的分类。顺序与微博 App 一致：关于 / 微博 / 相册 / 精选 / 视频。
 enum ProfileTab {
@@ -52,13 +54,18 @@ enum ProfileFilter {
       status.video != null || status.retweeted?.video != null;
 }
 
-/// 个人页顶部那一排文字分类，选中项加粗并带一小段下划线。
+/// 个人页可滑动切换的胶囊分类条（关于 / 微博(N) / 相册 / 精选 / 视频）。
+///
+/// 按文字实际宽度排布：常规屏宽下五项完整居中呈现，支持直接按住胶囊滑块拖拽切换
+/// 或左右横滑页面联动；窄屏 / 大字号超出宽度时自动启用横向滚动与两端渐隐。
 class ProfileTabBar extends StatelessWidget {
   const ProfileTabBar({
     super.key,
     required this.selected,
     required this.weiboCount,
     required this.onSelect,
+    this.pageController,
+    this.pinned = false,
   });
 
   final ProfileTab selected;
@@ -67,8 +74,19 @@ class ProfileTabBar extends StatelessWidget {
   final int weiboCount;
   final ValueChanged<ProfileTab> onSelect;
 
-  /// 和首页栏目条同一档高度，折叠头下面正好放得下。
-  static const double height = 46;
+  /// 与个人页横滑手势共用的弹簧控制器。
+  final HoboPagerController? pageController;
+
+  /// 吸顶且下方内容正在滚过时补一条底部分隔线，展开态保持无边框清爽观感。
+  final bool pinned;
+
+  /// 胶囊 40 + 上下各 5 留白，吸顶在折叠头下方舒展不拥挤。
+  static const double height = 50;
+
+  static String labelOf(ProfileTab tab, int weiboCount) =>
+      tab == ProfileTab.weibo && weiboCount > 0
+          ? '${tab.label}(${formatCount(weiboCount)})'
+          : tab.label;
 
   @override
   Widget build(BuildContext context) {
@@ -77,96 +95,34 @@ class ProfileTabBar extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: surface,
-        border: Border(
-          top: BorderSide(
-            color: scheme.outlineVariant.withValues(alpha: 0.5),
-            width: 0.5,
-          ),
-          bottom: BorderSide(
-            color: scheme.outlineVariant.withValues(alpha: 0.5),
-            width: 0.5,
-          ),
-        ),
+        border: pinned
+            ? Border(
+                bottom: BorderSide(
+                  color: scheme.outlineVariant.withValues(alpha: 0.45),
+                  width: 0.5,
+                ),
+              )
+            : null,
       ),
       child: SizedBox(
         height: height,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final tab in ProfileTab.values)
-                _TabButton(
-                  tab: tab,
-                  selected: tab == selected,
-                  count: tab == ProfileTab.weibo ? weiboCount : 0,
-                  onTap: () => onSelect(tab),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TabButton extends StatelessWidget {
-  const _TabButton({
-    required this.tab,
-    required this.selected,
-    required this.count,
-    required this.onTap,
-  });
-
-  final ProfileTab tab;
-  final bool selected;
-  final int count;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = context.colorScheme;
-    final label = count > 0 ? '${tab.label}(${formatCount(count)})' : tab.label;
-    final color = selected ? scheme.onSurface : scheme.onSurfaceVariant;
-    return Semantics(
-      container: true,
-      button: true,
-      selected: selected,
-      label: label,
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.only(right: 24, left: 2),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                label,
-                maxLines: 1,
-                style: AppTextStyle.subheadline
-                    .of(context)
-                    .copyWith(
-                      fontSize: 15,
-                      height: 1.2,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: color,
-                    ),
-              ),
-              const SizedBox(height: 5),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                width: selected ? 16 : 0,
-                height: 2.5,
-                decoration: ShapeDecoration(
-                  color: scheme.primary,
-                  shape: AppShape.full,
-                ),
-              ),
-            ],
+          padding: const EdgeInsets.fromLTRB(16, 5, 16, 5),
+          child: Center(
+            child: HoboCapsule<ProfileTab>(
+              segments: [
+                for (final tab in ProfileTab.values)
+                  (tab, labelOf(tab, weiboCount)),
+              ],
+              value: selected,
+              onChanged: onSelect,
+              pageController: pageController,
+              height: 40,
+              scrollable: true,
+              expand: true,
+              minSegmentWidth: 48,
+              segmentHorizontalPadding: 18,
+            ),
           ),
         ),
       ),
@@ -174,17 +130,19 @@ class _TabButton extends StatelessWidget {
   }
 }
 
-/// 把分类条钉在折叠头下面。
+/// 把胶囊分类条钉在折叠头下面。
 class ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
   ProfileTabBarDelegate({
     required this.selected,
     required this.weiboCount,
     required this.onSelect,
+    this.pageController,
   });
 
   final ProfileTab selected;
   final int weiboCount;
   final ValueChanged<ProfileTab> onSelect;
+  final HoboPagerController? pageController;
 
   @override
   double get minExtent => ProfileTabBar.height;
@@ -202,10 +160,15 @@ class ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
       selected: selected,
       weiboCount: weiboCount,
       onSelect: onSelect,
+      pageController: pageController,
+      pinned: overlapsContent,
     );
   }
 
   @override
   bool shouldRebuild(covariant ProfileTabBarDelegate old) =>
-      old.selected != selected || old.weiboCount != weiboCount;
+      old.selected != selected ||
+      old.weiboCount != weiboCount ||
+      old.pageController != pageController ||
+      old.onSelect != onSelect;
 }

@@ -1,3 +1,5 @@
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:prism_ui/icons/icons.dart';
 import 'package:prism_ui/prism_ui.dart';
@@ -13,6 +15,7 @@ import '../widgets/common.dart';
 import '../widgets/feed_list.dart';
 import '../widgets/glyphs.dart';
 import '../widgets/image_actions.dart';
+import '../widgets/pager.dart';
 import '../widgets/profile_about.dart';
 import '../widgets/profile_album.dart';
 import '../widgets/profile_header.dart';
@@ -21,7 +24,7 @@ import '../widgets/profile_tabs.dart';
 import '../widgets/refresh.dart';
 import '../widgets/status_card.dart';
 
-/// 用户主页：折叠资料头 + 一排分类（关于 / 微博 / 相册 / 精选 / 视频）。
+/// 用户主页：折叠资料头 + 可滑动切换胶囊分类（关于 / 微博 / 相册 / 精选 / 视频）。
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key, this.uid = '', this.showBack = true});
 
@@ -35,11 +38,21 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class _ProfilePageState extends State<ProfilePage>
+    with TickerProviderStateMixin {
   final ScrollController _scroll = ScrollController();
+  final GlobalKey _introKey = GlobalKey();
+  final Map<ProfileTab, double> _tabOffsets = {};
 
   ProfileTab _tab = ProfileTab.weibo;
   ProfileFilter _filter = ProfileFilter.all;
+
+  /// 胶囊分类条与个人页横向滑动共用同一条弹簧。
+  late final HoboPagerController _pager = HoboPagerController(
+    vsync: this,
+    initialPage: _tab.index,
+    count: ProfileTab.values.length,
+  );
 
   /// 「微博」栏目的列表 / 网格。
   bool _grid = false;
@@ -59,10 +72,15 @@ class _ProfilePageState extends State<ProfilePage> {
   double _lastPixels = 0;
   bool _loadQueued = false;
   bool _fillQueued = false;
+  bool _restoringScroll = false;
   double _swipeDx = 0;
+  double _swipeFrom = 0;
 
   /// 「我」这一栏和底栏共用外壳的显隐；push 进来的主页只管自己。
   bool get _isTab => !widget.showBack;
+
+  bool get _disableAnimations =>
+      MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
   bool get _isSelf =>
       _uid.isNotEmpty && _uid == context.read<Repo>().session?.uid;
@@ -80,6 +98,7 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void dispose() {
     _scroll.dispose();
+    _pager.dispose();
     _feed?.dispose();
     _featured?.dispose();
     _video?.dispose();
@@ -97,6 +116,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   /// 和首页一样：往下翻一屏才藏底栏，往上滑或到顶就露出来。
   void _handleScroll(double delta, bool atTop) {
+    if (_restoringScroll) return;
     if (atTop) {
       _setHidden(false);
       return;
@@ -242,34 +262,86 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // ---- 栏目切换 ----
 
-  void _selectTab(ProfileTab tab) {
+  double _pinnedOffset() {
+    final topInset = MediaQuery.paddingOf(context).top;
+    final nameLine = ProfileHeaderDelegate.nameLineOf(context);
+    final headerRange =
+        ProfileHeaderDelegate.expandedExtent(topInset, nameLine) -
+        ProfileHeaderDelegate.collapsedExtent(topInset);
+    final introBox =
+        _introKey.currentContext?.findRenderObject() as RenderBox?;
+    return headerRange + (introBox?.size.height ?? 0);
+  }
+
+  void _selectTab(ProfileTab tab, {bool syncPager = true}) {
     if (tab == _tab) return;
+    final previous = _tab;
+    final pinnedOffset = _pinnedOffset();
+    final wasPinned = _scroll.hasClients && _scroll.offset > pinnedOffset;
+    if (wasPinned) {
+      _tabOffsets[previous] = _scroll.offset;
+    }
     setState(() => _tab = tab);
+    if (syncPager &&
+        (!_pager.isAnimating || (_pager.targetPage - tab.index).abs() > 0.01)) {
+      _pager.goToPage(
+        tab.index,
+        velocity: _pager.velocity,
+        animate: !_disableAnimations,
+      );
+    }
     _ensureTab(tab);
     _setHidden(false);
+    if (wasPinned) {
+      final target = _tabOffsets[tab] ?? pinnedOffset;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scroll.hasClients) return;
+        final pos = _scroll.position;
+        final clamped = target.clamp(pos.minScrollExtent, pos.maxScrollExtent);
+        if ((pos.pixels - clamped).abs() < 0.5) return;
+        _restoringScroll = true;
+        try {
+          _scroll.jumpTo(clamped);
+          _lastPixels = clamped;
+        } finally {
+          _restoringScroll = false;
+        }
+      });
+    }
   }
 
-  void _stepTab(int delta) {
-    final index = ProfileTab.values.indexOf(_tab) + delta;
-    if (index < 0 || index >= ProfileTab.values.length) return;
-    _selectTab(ProfileTab.values[index]);
+  void _onSwipeStart(DragStartDetails details) {
+    _swipeDx = 0;
+    _swipeFrom = _pager.page;
+    _pager.beginDrag();
   }
 
-  void _onSwipeStart(DragStartDetails details) => _swipeDx = 0;
-
-  void _onSwipeUpdate(DragUpdateDetails details) =>
-      _swipeDx += details.delta.dx;
+  void _onSwipeUpdate(DragUpdateDetails details) {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width <= 0) return;
+    _swipeDx += details.delta.dx;
+    _pager.dragTo(
+      _swipeFrom - _swipeDx / width,
+      velocity: -details.delta.dx * 60 / width,
+      animate: !_disableAnimations,
+    );
+  }
 
   void _onSwipeEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    final left = _swipeDx < -48 || velocity < -320;
-    final right = _swipeDx > 48 || velocity > 320;
+    final width = MediaQuery.sizeOf(context).width;
+    final velocity = width > 0 ? -(details.primaryVelocity ?? 0) / width : 0.0;
     _swipeDx = 0;
-    if (left) {
-      _stepTab(1);
-    } else if (right) {
-      _stepTab(-1);
+    final landed = _pager.endDrag(velocity, animate: !_disableAnimations);
+    final next = ProfileTab.values[landed];
+    if (next != _tab) {
+      HapticFeedback.selectionClick();
+      _selectTab(next, syncPager: false);
     }
+  }
+
+  void _onSwipeCancel() {
+    _swipeDx = 0;
+    _pager.endDrag(0, animate: !_disableAnimations);
   }
 
   Future<void> _pickFilter() async {
@@ -437,9 +509,11 @@ class _ProfilePageState extends State<ProfilePage> {
         onRefresh: _refresh,
         topInset: topInset + ProfileHeaderDelegate.barHeight + 8,
         child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
           onHorizontalDragStart: _onSwipeStart,
           onHorizontalDragUpdate: _onSwipeUpdate,
           onHorizontalDragEnd: _onSwipeEnd,
+          onHorizontalDragCancel: _onSwipeCancel,
           child: NotificationListener<ScrollNotification>(
             onNotification: _onScroll,
             child: CustomScrollView(
@@ -465,10 +539,17 @@ class _ProfilePageState extends State<ProfilePage> {
                   delegate: ProfileTabBarDelegate(
                     selected: _tab,
                     weiboCount: user.statuses,
+                    pageController: _pager,
                     onSelect: _selectTab,
                   ),
                 ),
-                ..._contentSlivers(user),
+                for (final sliver in _contentSlivers(user))
+                  _SliverSlide(
+                    pager: _pager,
+                    index: _tab.index,
+                    enabled: !_disableAnimations,
+                    sliver: sliver,
+                  ),
                 SliverToBoxAdapter(
                   child: SizedBox(height: pageBottomInset(context)),
                 ),
@@ -482,6 +563,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _intro(User user) {
     return Padding(
+      key: _introKey,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -900,5 +982,110 @@ class _Stat extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// 跟着 [HoboPagerController] 连续位置做轻微横向位移的 sliver 包装：
+/// 直接监听控制器刷新绘制层，切栏与横滑期间不触发下方列表重建。
+class _SliverSlide extends SingleChildRenderObjectWidget {
+  const _SliverSlide({
+    required this.pager,
+    required this.index,
+    required this.enabled,
+    required Widget sliver,
+  }) : super(child: sliver);
+
+  final HoboPagerController pager;
+  final int index;
+  final bool enabled;
+
+  @override
+  _RenderSliverSlide createRenderObject(BuildContext context) =>
+      _RenderSliverSlide(pager, index, enabled);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderSliverSlide renderObject,
+  ) {
+    renderObject
+      ..pager = pager
+      ..index = index
+      ..enabled = enabled;
+  }
+}
+
+class _RenderSliverSlide extends RenderProxySliver {
+  _RenderSliverSlide(this._pager, this._index, this._enabled);
+
+  static const double _maxShift = 36;
+
+  HoboPagerController _pager;
+  set pager(HoboPagerController value) {
+    if (identical(_pager, value)) return;
+    if (attached) _pager.removeListener(markNeedsPaint);
+    _pager = value;
+    if (attached) _pager.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  int _index;
+  set index(int value) {
+    if (_index == value) return;
+    _index = value;
+    markNeedsPaint();
+  }
+
+  bool _enabled;
+  set enabled(bool value) {
+    if (_enabled == value) return;
+    _enabled = value;
+    markNeedsPaint();
+  }
+
+  double get _dx {
+    if (!_enabled) return 0;
+    final delta = (_index - _pager.page).clamp(-1.0, 1.0);
+    if (delta.abs() < 1e-4) return 0;
+    return delta * _maxShift;
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _pager.addListener(markNeedsPaint);
+  }
+
+  @override
+  void detach() {
+    _pager.removeListener(markNeedsPaint);
+    super.detach();
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child == null) return;
+    final dx = _dx;
+    context.paintChild(child!, dx == 0 ? offset : offset + Offset(dx, 0));
+  }
+
+  @override
+  bool hitTestChildren(
+    SliverHitTestResult result, {
+    required double mainAxisPosition,
+    required double crossAxisPosition,
+  }) {
+    return super.hitTestChildren(
+      result,
+      mainAxisPosition: mainAxisPosition,
+      crossAxisPosition: crossAxisPosition - _dx,
+    );
+  }
+
+  @override
+  void applyPaintTransform(RenderObject child, Matrix4 transform) {
+    final dx = _dx;
+    if (dx != 0) transform.translateByDouble(dx, 0, 0, 1);
+    super.applyPaintTransform(child, transform);
   }
 }
