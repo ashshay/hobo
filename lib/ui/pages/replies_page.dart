@@ -142,6 +142,11 @@ class _RepliesPageState extends State<RepliesPage> {
                 openImages(context, pics: pics, index: index),
             onLongPressImage: (pics, index) =>
                 showImageActions(context, pics: pics, index: index),
+            onLongPress: () => showCommentActions(
+              context,
+              widget.comment,
+              onReply: () => _replyTo(widget.comment),
+            ),
             onReply: () => _replyTo(widget.comment),
             onLike: null,
           ),
@@ -190,6 +195,11 @@ class _RepliesPageState extends State<RepliesPage> {
                     openImages(context, pics: pics, index: index),
                 onLongPressImage: (pics, index) =>
                     showImageActions(context, pics: pics, index: index),
+                onLongPress: () => showCommentActions(
+                  context,
+                  reply,
+                  onReply: () => _replyTo(reply),
+                ),
                 onReply: () => _replyTo(reply),
               ),
           if (_replies.isNotEmpty && !_atEnd)

@@ -136,9 +136,11 @@ class _SearchPageState extends State<SearchPage> with TickerProviderStateMixin {
   void _submit(String text) {
     final query = text.trim();
     if (query.isEmpty) return;
+    _debounce?.cancel();
     _input
       ..text = query
       ..selection = TextSelection.collapsed(offset: query.length);
+    _debounce?.cancel();
     _focus.unfocus();
     context.read<Settings>().pushSearchHistory(query);
     _feed?.dispose();
@@ -378,7 +380,7 @@ class _SearchPageState extends State<SearchPage> with TickerProviderStateMixin {
           runSpacing: 8,
           children: [
             for (final item in history)
-              Chip(
+              HoboRemovableChip(
                 label: item,
                 onPressed: () => _submit(item),
                 onDeleted: () => settings.removeSearchHistory(item),

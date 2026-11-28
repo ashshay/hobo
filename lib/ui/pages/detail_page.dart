@@ -10,6 +10,7 @@ import '../../data/store.dart';
 import '../routes.dart';
 import '../widgets/comment_tile.dart';
 import '../widgets/common.dart';
+import '../widgets/copy_dialog.dart';
 import '../widgets/glyphs.dart';
 import '../widgets/image_actions.dart';
 import '../widgets/refresh.dart';
@@ -306,6 +307,9 @@ class _DetailPageState extends State<DetailPage> {
           onLongPressImage: (pics, index) =>
               showImageActions(context, pics: pics, index: index),
           onVideo: (video) => openVideo(context, video),
+          // 长按正文直接进复制面板；卡片「更多」里也是同一个入口。
+          onLongPress: () =>
+              showHoboCopyDialog(context, statusCopyText(status)),
           onLink: (url) => handleLink(context, url),
           onLike: _toggleLike,
           onComment: _comment,
@@ -404,7 +408,6 @@ class _DetailPageState extends State<DetailPage> {
               floor: i + 1,
               authorId: status.user?.id ?? '',
               style: context.watch<Settings>().commentStyle,
-              showDivider: i != _comments.length - 1,
               onReply: () => _reply(_comments[i]),
               onLike: () => _likeComment(_comments[i]),
               onUser: (user) => openUser(context, user),
@@ -413,6 +416,12 @@ class _DetailPageState extends State<DetailPage> {
                   openImages(context, pics: pics, index: index),
               onLongPressImage: (pics, index) =>
                   showImageActions(context, pics: pics, index: index),
+              // 长按一条评论取文字，点按仍是点赞 / 回复那一排。
+              onLongPress: () => showCommentActions(
+                context,
+                _comments[i],
+                onReply: () => _reply(_comments[i]),
+              ),
               // 「查看全部 N 条回复」展开这一层的全部回复。
               onOpenReplies: () => openReplies(
                 context,

@@ -77,13 +77,13 @@ enum ImageBrowseQuality {
   }
 }
 
-/// 评论区排版。
+/// 评论区排版，与 TiebaFrosted 的「评论区样式」同一个思路。
 ///
-/// [card] 是原来的楼层卡片；[flat] 照 Bifu 的图一样式做——不要卡片底，
-/// 左头像 + 右侧正文，时间和赞/回复落在同一行，条目之间只留间距。
+/// [card] 每条评论一张圆角卡片，楼中楼预览、点赞与回复都收在卡片里；
+/// [merged] 去掉卡片底，头像 + 昵称 + 正文 + 时间/赞一行到底，楼中楼收进底部圆角条。
 enum CommentStyle {
-  card('card', '卡片式', '一条评论一个圆角卡片'),
-  flat('flat', '非卡片式', '图一样式，只有头像和间距');
+  card('card', '卡片', '每条评论独立成卡片，楼中楼预览、点赞与回复都收在卡片里。'),
+  merged('merged', '融合', '评论铺在页面底色上，头像、昵称、正文与时间一眼看完，楼中楼收进底部圆角条。');
 
   const CommentStyle(this.key, this.label, this.summary);
 
@@ -92,6 +92,8 @@ enum CommentStyle {
   final String summary;
 
   static CommentStyle fromKey(String? key) {
+    // 早先这档叫 flat，排版没变、只是改了名，读到旧值直接升级成 merged。
+    if (key == 'flat') return merged;
     for (final value in values) {
       if (value.key == key) return value;
     }
@@ -268,7 +270,7 @@ class Settings extends ChangeNotifier {
   bool _monetCards = false;
   bool _confirmLike = false;
 
-  /// 评论区排版：卡片式（旧）或非卡片式（照 Bifu 的图一样式）。
+  /// 评论区排版：卡片或融合（与 TiebaFrosted 的评论区样式同一套排法）。
   CommentStyle _commentStyle = CommentStyle.card;
 
   /// 收藏同步到微博：点收藏时顺手写进微博收藏夹（网页版也看得到）；关掉退回纯本机星标。

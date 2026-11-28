@@ -45,6 +45,10 @@ class SuperTopicInfo {
     this.readCount = '',
     this.postCount = '',
     this.fanCount = '',
+    this.following = false,
+    this.levelText = '',
+    this.checkInText = '',
+    this.checkedIn = false,
   });
 
   final String containerId;
@@ -54,6 +58,61 @@ class SuperTopicInfo {
   final String readCount;
   final String postCount;
   final String fanCount;
+  final bool following;
+  final String levelText;
+  final String checkInText;
+  final bool checkedIn;
+
+  SuperTopicInfo copyWith({
+    String? title,
+    String? description,
+    String? avatar,
+    String? readCount,
+    String? postCount,
+    String? fanCount,
+    bool? following,
+    String? levelText,
+    String? checkInText,
+    bool? checkedIn,
+  }) => SuperTopicInfo(
+    containerId: containerId,
+    title: title ?? this.title,
+    description: description ?? this.description,
+    avatar: avatar ?? this.avatar,
+    readCount: readCount ?? this.readCount,
+    postCount: postCount ?? this.postCount,
+    fanCount: fanCount ?? this.fanCount,
+    following: following ?? this.following,
+    levelText: levelText ?? this.levelText,
+    checkInText: checkInText ?? this.checkInText,
+    checkedIn: checkedIn ?? this.checkedIn,
+  );
+}
+
+/// 一次超话签到的服务端结果。
+class SuperTopicCheckInResult {
+  const SuperTopicCheckInResult({
+    required this.containerId,
+    required this.alreadyCheckedIn,
+    required this.message,
+    this.title = '',
+    this.subtitle = '',
+  });
+
+  final String containerId;
+  final bool alreadyCheckedIn;
+  final String message;
+  final String title;
+  final String subtitle;
+}
+
+/// 微博超话签到按北京时间（UTC+8）零点重置，本地记录统一用东八区日期键。
+String beijingDateKey([DateTime? now]) {
+  final bj = (now ?? DateTime.now()).toUtc().add(const Duration(hours: 8));
+  final y = bj.year.toString().padLeft(4, '0');
+  final m = bj.month.toString().padLeft(2, '0');
+  final d = bj.day.toString().padLeft(2, '0');
+  return '$y-$m-$d';
 }
 
 class SuperTopicPage {
@@ -79,6 +138,7 @@ class SuperTopicSummary {
     this.desc1 = '',
     this.desc2 = '',
     this.scheme = '',
+    this.checkedIn,
   });
 
   final String containerId;
@@ -87,6 +147,26 @@ class SuperTopicSummary {
   final String desc1;
   final String desc2;
   final String scheme;
+
+  /// `true` 已签到，`false` 未签到，`null` 列表未返回签到状态（如超话广场、桌面回退接口）。
+  final bool? checkedIn;
+
+  SuperTopicSummary copyWith({
+    String? title,
+    String? avatar,
+    String? desc1,
+    String? desc2,
+    String? scheme,
+    bool? checkedIn,
+  }) => SuperTopicSummary(
+    containerId: containerId,
+    title: title ?? this.title,
+    avatar: avatar ?? this.avatar,
+    desc1: desc1 ?? this.desc1,
+    desc2: desc2 ?? this.desc2,
+    scheme: scheme ?? this.scheme,
+    checkedIn: checkedIn ?? this.checkedIn,
+  );
 
   Map<String, dynamic> toJson() => {
     'containerId': containerId,
@@ -230,33 +310,124 @@ SuperTopicPage parseSuperTopicPage(
   }
 
   final counts = <String, String>{};
+  var levelText = '';
+  var checkInText = '';
+  var checkedIn = false;
   final descriptions = page.arr('desc_more');
   if (descriptions != null) {
     for (final item in descriptions) {
-      final text = item?.toString().replaceAll(RegExp(r'\s|\u3000'), '') ?? '';
-      if (text.isEmpty) continue;
-      for (final match in _superTopicCount.allMatches(text)) {
+      final raw = item?.toString().trim() ?? '';
+      if (raw.isEmpty) continue;
+      final compact = raw.replaceAll(RegExp(r'\s|\u3000'), '');
+      for (final match in _superTopicCount.allMatches(compact)) {
         counts.putIfAbsent(match[1]!, () => match[2]!);
+      }
+      final cleaned = raw.replaceAll(RegExp(r'\s*>>+\s*$'), '').trim();
+      if (cleaned.contains('已签到') || cleaned.contains('今日已签')) {
+        checkedIn = true;
+      }
+      if (cleaned.contains('等级') ||
+          cleaned.contains('LV.') ||
+          cleaned.contains('签到')) {
+        for (final part in cleaned.split(RegExp(r'[\s\u3000]+'))) {
+          final token = part.trim();
+          if (token.isEmpty) continue;
+          if (levelText.isEmpty &&
+              (token.contains('LV.') || token.contains('等级'))) {
+            levelText = token;
+          } else if (checkInText.isEmpty &&
+              (token.contains('签到') || token.contains('已签'))) {
+            checkInText = token;
+          }
+        }
       }
     }
   }
 
   final total = page.str('total');
+  final following = page.intOf('follow_relation') > 0 || page.boolean('is_follow');
+  final rawDesc = page.str('desc').trim();
+  // 无自定义简介的超话，微博会把 desc_more 拼进 desc，过滤掉以免与统计/签到行重复。
+  final joinedMeta = (descriptions ?? const [])
+      .map((e) => e?.toString().replaceAll(RegExp(r'[\s\u3000>]+'), '') ?? '')
+      .join();
+  final compactDesc = rawDesc.replaceAll(RegExp(r'[\s\u3000>]+'), '');
+  final description =
+      compactDesc.isNotEmpty &&
+          joinedMeta.isNotEmpty &&
+          (compactDesc == joinedMeta || joinedMeta.contains(compactDesc))
+      ? ''
+      : rawDesc;
   return SuperTopicPage(
     info: SuperTopicInfo(
       containerId: expected,
       title: title,
-      description: page.str('desc'),
+      description: description,
       avatar: _firstNonEmpty([page.str('portrait_hd'), page.str('portrait')]),
       readCount: counts['阅读'] ?? '',
       postCount: counts['帖子'] ??
           (RegExp(r'^\d+$').hasMatch(total) ? total : ''),
       fanCount: counts['粉丝'] ?? '',
+      following: following,
+      levelText: levelText,
+      checkInText: checkInText,
+      checkedIn: checkedIn,
     ),
     items: items.values.toList(),
     nextCursor: cursor,
     tabs: _extractTabs(data, page, expected),
   );
+}
+
+/// 解析 `weibo.com/p/aj/general/button?api=http://i.huati.weibo.com/aj/super/checkin` 返回。
+///
+/// 实测形态：
+/// - 成功：`{"code":"100000","msg":"已签到","data":{"tipMessage":"今日签到，经验值+4","alert_title":"今日签到 第28名","alert_subtitle":"经验值+4"}}`
+/// - 当日已签：`{"code":"382004","msg":"今天已签到(382004)"}`
+SuperTopicCheckInResult parseSuperTopicCheckIn(
+  Map<String, dynamic> root,
+  String containerId,
+) {
+  final id = normalizedSuperTopicId(containerId) ?? containerId.trim().toLowerCase();
+  final code = root.str('code').trim();
+  final msg = root.str('msg').trim();
+  final data = root.obj('data');
+
+  if (code == '100000') {
+    final title = data?.str('alert_title').trim() ?? '';
+    final subtitle = data?.str('alert_subtitle').trim() ?? '';
+    final tip = data?.str('tipMessage').trim() ?? '';
+    final String message;
+    if (title.isNotEmpty && subtitle.isNotEmpty) {
+      message = title.contains(subtitle) ? title : '$title · $subtitle';
+    } else {
+      message = _firstNonEmpty([tip, title, subtitle, msg, '签到成功']);
+    }
+    return SuperTopicCheckInResult(
+      containerId: id,
+      alreadyCheckedIn: false,
+      message: message,
+      title: title,
+      subtitle: subtitle,
+    );
+  }
+
+  if (code == '382004' || msg.contains('已签到') || msg.contains('今天已签')) {
+    final clean = msg.replaceAll(RegExp(r'\(\d+\)\s*$'), '').trim();
+    return SuperTopicCheckInResult(
+      containerId: id,
+      alreadyCheckedIn: true,
+      message: clean.isEmpty ? '今天已经签到过了' : clean,
+    );
+  }
+
+  final detail = _firstNonEmpty([
+    msg,
+    data?.str('tipMessage') ?? '',
+    root.str('message'),
+    code.isEmpty ? '签到失败' : '签到失败（$code）',
+  ]);
+  throw ApiException(detail, code.isEmpty ? null : code);
 }
 
 String? _resolveTabCursor(
@@ -531,6 +702,10 @@ void _collectSuperTopicListCards(
       o.str('topic_name'),
     ]));
     if (cid != null && title.isNotEmpty) {
+      final desc2 = stripHtml(_firstNonEmpty([
+        o.str('desc2'),
+        o.str('content2'),
+      ])).trim();
       topics.putIfAbsent(
         cid,
         () => SuperTopicSummary(
@@ -548,11 +723,9 @@ void _collectSuperTopicListCards(
             o.str('item_desc'),
             o.str('content1'),
           ])).trim(),
-          desc2: stripHtml(_firstNonEmpty([
-            o.str('desc2'),
-            o.str('content2'),
-          ])).trim(),
+          desc2: desc2,
           scheme: scheme,
+          checkedIn: _parseSuperTopicCardCheckedIn(o, desc2),
         ),
       );
     }
@@ -566,6 +739,29 @@ String _cleanTopicTitle(String raw) => stripHtml(raw)
     .replaceAll(RegExp(r'^#+|#+$'), '')
     .replaceAll('\u00a0', ' ')
     .trim();
+
+/// 解析 `100803_-_followsuper` 卡片里的签到按钮：
+/// 未签时 `buttons[0]` 为 `{"name":"签到","scheme":"/api/container/button?...active_fcheckin..."}`；
+/// 已签时变为 `{"name":"已签","scheme":false}`。
+bool? _parseSuperTopicCardCheckedIn(Map<String, dynamic> card, String desc2) {
+  final buttons = card.arr('buttons');
+  if (buttons != null) {
+    for (final raw in buttons) {
+      final btn = jObj(raw);
+      if (btn == null) continue;
+      final name = btn.str('name').trim();
+      final scheme = btn.opt('scheme') is String ? btn.str('scheme').trim() : '';
+      if (name.contains('已签')) return true;
+      if (name == '签到' ||
+          name.contains('签到') ||
+          scheme.contains('checkin')) {
+        return false;
+      }
+    }
+  }
+  if (desc2.contains('已签到') || desc2.contains('今日已签')) return true;
+  return null;
+}
 
 String _normalizePicUrl(String raw) {
   final value = raw.trim();

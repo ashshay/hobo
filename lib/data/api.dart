@@ -140,6 +140,8 @@ class Api {
     String target,
     String? cookie, {
     String referer = 'https://weibo.com/',
+    String? xsrfToken,
+    String? origin,
   }) {
     return _request(
       target,
@@ -148,8 +150,10 @@ class Api {
         'User-Agent': desktopUa,
         'Accept': 'application/json, text/plain, */*',
         'Referer': referer,
+        if (origin != null && origin.isNotEmpty) 'Origin': origin,
         'X-Requested-With': 'XMLHttpRequest',
         if (cookie != null && cookie.isNotEmpty) 'Cookie': cookie,
+        if (xsrfToken != null && xsrfToken.isNotEmpty) 'X-XSRF-TOKEN': xsrfToken,
       },
     );
   }

@@ -32,7 +32,6 @@ class CommentTile extends StatelessWidget {
     this.onLongPress,
     this.nested = false,
     this.style = CommentStyle.card,
-    this.showDivider = false,
   });
 
   final Comment comment;
@@ -58,16 +57,18 @@ class CommentTile extends StatelessWidget {
   /// 一级评论的排版；楼中楼里的单条回复固定用小卡片。
   final CommentStyle style;
 
-  /// 非卡片式下是否在底部拉一条浅色分隔线（列表里除最后一条都给 true）。
-  final bool showDivider;
-
   bool get _isAuthor =>
       authorId.isNotEmpty && comment.user?.id == authorId;
 
   @override
+  @override
   Widget build(BuildContext context) {
-    // 楼中楼里的单条回复保持原来的小卡片，只有一级评论跟随样式设置。
-    if (style == CommentStyle.flat && !nested) return _buildFlat(context);
+    // 楼中楼里的单条回复保持小卡片，只有一级评论跟随「评论区样式」。
+    if (style == CommentStyle.merged && !nested) return _buildMerged(context);
+    return _buildCard(context);
+  }
+
+  Widget _buildCard(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: nested ? 8 : 10),
       child: HoboCard(
@@ -86,7 +87,19 @@ class CommentTile extends StatelessWidget {
               children: [
                 _avatar(context),
                 const SizedBox(width: 10),
-                Expanded(child: _nameRow(context, showMeta: true)),
+                Expanded(
+                  child: _nameRow(
+                    context,
+                    showMeta: true,
+                    nameStyle: AppTextStyle.headline.of(context).copyWith(
+                      color: context.colorScheme.onSurface,
+                      fontWeight: FontWeightScope.resolve(
+                        context,
+                        FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
             SizedBox(height: nested ? 6 : 8),
@@ -99,86 +112,87 @@ class CommentTile extends StatelessWidget {
     );
   }
 
-  /// 非卡片式：照 Bifu 的图一样式——左头像、右侧昵称/正文/时间，末尾一行「时间 · 赞 · 回复」。
-  /// [showDivider] 是列表给的：除了最后一条，底下拉一条浅色分隔线代替卡片边界。
-  Widget _buildFlat(BuildContext context) {
+  /// 融合样式：照 TiebaFrosted 的融合排版——没有卡片底，头像放大到 40，
+  /// 昵称加粗、正文用正文级字号，时间与点赞落在同一行，楼中楼收成一条圆角横条。
+  Widget _buildMerged(BuildContext context) {
     final scheme = context.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(0, 2, 0, showDivider ? 14 : 16),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onLongPress: onLongPress,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _avatar(context),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    final meta = _metaText();
+    final replyTotal = comment.replyCount > 0
+        ? comment.replyCount
+        : comment.replies.length;
+    final nameStyle = AppTextStyle.body.of(context).copyWith(
+      color: scheme.onSurface,
+      fontWeight: FontWeightScope.resolve(context, FontWeight.w700),
+    );
+    final bodyStyle = AppTextStyle.body.of(
+      context,
+    ).copyWith(color: scheme.onSurface, height: 1.45);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: onLongPress,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 2, 0, 18),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _avatar(context, size: 40),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _nameRow(context, showMeta: false, nameStyle: nameStyle),
+                  const SizedBox(height: 6),
+                  _content(context, bodyStyle: bodyStyle, showReplies: false),
+                  const SizedBox(height: 8),
+                  Row(
                     children: [
-                      _nameRow(context, showMeta: false),
-                      const SizedBox(height: 4),
-                      _content(context),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _metaText(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyle.caption1.of(context).copyWith(
-                                fontSize: 11.5,
-                                color: scheme.onSurfaceVariant,
-                              ),
+                      if (meta.isNotEmpty)
+                        Expanded(
+                          child: Text(
+                            meta,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyle.footnote.of(context).copyWith(
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          _CommentAction(
-                            glyph: HoboGlyphs.like,
-                            label: comment.likes > 0 ? '${comment.likes}' : '赞',
-                            active: comment.liked,
-                            activeColor: scheme.error,
-                            onTap: onLike,
-                          ),
-                          const SizedBox(width: 2),
-                          _CommentAction(
-                            glyph: HoboGlyphs.comment,
-                            label: '回复',
-                            onTap: onReply,
-                          ),
-                        ],
+                        )
+                      else
+                        const Spacer(),
+                      const SizedBox(width: 8),
+                      _MergedLikeButton(
+                        likes: comment.likes,
+                        liked: comment.liked,
+                        onTap: onLike,
                       ),
                     ],
                   ),
-                ),
-              ],
+                  if (replyTotal > 0 && onOpenReplies != null) ...[
+                    const SizedBox(height: 10),
+                    _MergedRepliesBar(
+                      total: replyTotal,
+                      onPressed: onOpenReplies,
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
+          ],
         ),
-        if (showDivider)
-          Container(
-            key: const ValueKey('comment-divider'),
-            height: 0.5,
-            color: scheme.outlineVariant.withValues(alpha: 0.45),
-          ),
-      ],
+      ),
     );
   }
 
-  Widget _avatar(BuildContext context) {
+  Widget _avatar(BuildContext context, {double? size}) {
     final user = comment.user;
-    final size = nested ? 30.0 : 36.0;
+    final side = size ?? (nested ? 30.0 : 36.0);
     final url = user?.avatar ?? '';
     // 没头像的账号（以及设置里的预览样例）给一颗首字圆片，别留一个空洞。
     final Widget avatar = url.isEmpty
         ? Container(
-            width: size,
-            height: size,
+            width: side,
+            height: side,
             alignment: Alignment.center,
             decoration: ShapeDecoration(
               color: context.colorScheme.surfaceContainerHighest,
@@ -189,24 +203,30 @@ class CommentTile extends StatelessWidget {
                   ? user.name.substring(0, 1)
                   : '评',
               style: TextStyle(
-                fontSize: size * 0.4,
+                fontSize: side * 0.4,
                 fontWeight: FontWeight.w600,
                 color: context.colorScheme.onSurfaceVariant,
               ),
             ),
           )
-        : Avatar(url: url, size: size);
+        : Avatar(url: url, size: side);
     if (user == null) return avatar;
     return GestureDetector(onTap: () => onUser?.call(user), child: avatar);
   }
 
-  Widget _nameRow(BuildContext context, {required bool showMeta}) {
+  Widget _nameRow(
+    BuildContext context, {
+    required bool showMeta,
+    TextStyle? nameStyle,
+  }) {
     final scheme = context.colorScheme;
     final user = comment.user;
     final meta = _metaText();
-    final nameStyle = AppTextStyle.subheadline
-        .of(context, emphasized: true)
-        .copyWith(fontSize: nested ? 14 : 15, color: scheme.onSurface);
+    final style =
+        nameStyle ??
+        AppTextStyle.subheadline
+            .of(context, emphasized: true)
+            .copyWith(fontSize: nested ? 14 : 15, color: scheme.onSurface);
     return GestureDetector(
       onTap: user == null ? null : () => onUser?.call(user),
       behavior: HitTestBehavior.opaque,
@@ -220,7 +240,7 @@ class CommentTile extends StatelessWidget {
                   user?.name.isNotEmpty == true ? user!.name : '评论',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: nameStyle,
+                  style: style,
                 ),
               ),
               if (user?.verified == true) ...[
@@ -243,8 +263,7 @@ class CommentTile extends StatelessWidget {
               meta,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyle.caption1.of(context).copyWith(
-                fontSize: 11.5,
+              style: AppTextStyle.footnote.of(context).copyWith(
                 color: scheme.onSurfaceVariant,
               ),
             ),
@@ -254,18 +273,25 @@ class CommentTile extends StatelessWidget {
     );
   }
 
-  Widget _content(BuildContext context) {
+  Widget _content(
+    BuildContext context, {
+    TextStyle? bodyStyle,
+    bool showReplies = true,
+  }) {
     final scheme = context.colorScheme;
+    final style =
+        bodyStyle ??
+        AppTextStyle.subheadline.of(context).copyWith(
+          fontSize: nested ? 14 : 15,
+          height: 1.45,
+          color: scheme.onSurface,
+        );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         WeiboText(
           html: comment.textHtml,
-          style: AppTextStyle.body.of(context).copyWith(
-            fontSize: nested ? 14 : 14.5,
-            height: 1.42,
-            color: scheme.onSurface,
-          ),
+          style: style,
           onLink: onLink,
           maxLines: 40,
         ),
@@ -294,7 +320,7 @@ class CommentTile extends StatelessWidget {
             ),
           ),
         ],
-        if (!nested && comment.replies.isNotEmpty) ...[
+        if (showReplies && !nested && comment.replies.isNotEmpty) ...[
           const SizedBox(height: 8),
           _ReplyBlock(
             replies: comment.replies,
@@ -528,6 +554,98 @@ class _AuthorBadge extends StatelessWidget {
           height: 1.1,
           fontWeight: FontWeight.w600,
           color: context.colorScheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
+/// 融合样式的点赞：文字在前、拇指在后，贴在同一行右端（与 TiebaFrosted 一致）。
+class _MergedLikeButton extends StatelessWidget {
+  const _MergedLikeButton({
+    required this.likes,
+    required this.liked,
+    this.onTap,
+  });
+
+  final int likes;
+  final bool liked;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colorScheme;
+    final color = liked ? scheme.error : scheme.onSurfaceVariant;
+    return PressScale(
+      scale: 0.94,
+      enabled: onTap != null,
+      child: PressSurface(
+        fill: const Color(0x00000000),
+        shape: AppShape.full,
+        onPressed: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '赞',
+                style: AppTextStyle.footnote.of(context).copyWith(color: color),
+              ),
+              if (likes > 0) ...[
+                const SizedBox(width: 4),
+                Text(
+                  '$likes',
+                  style: AppTextStyle.footnote
+                      .of(context, emphasized: liked)
+                      .copyWith(color: color),
+                ),
+              ],
+              const SizedBox(width: 5),
+              if (context.disableAnimations)
+                GlyphIcon(
+                  HoboGlyphs.like,
+                  size: 17,
+                  color: color,
+                  fill: liked ? 1 : 0,
+                )
+              else
+                IconTheme(
+                  data: IconThemeData(size: 17, color: color),
+                  child: AnimatedGlyph(glyph: HoboGlyphs.like, filled: liked),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 融合样式的楼中楼入口：一条铺满的圆角横条，取代卡片里的预览块。
+class _MergedRepliesBar extends StatelessWidget {
+  const _MergedRepliesBar({required this.total, this.onPressed});
+
+  final int total;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressSurface(
+      fill: context.surfaceLevel.next.colorOf(context.colorScheme),
+      shape: AppShape.all(AppCorner.md),
+      onPressed: onPressed,
+      childFills: true,
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Text(
+            '查看全部 $total 条回复',
+            style: AppTextStyle.subheadline
+                .of(context, emphasized: true)
+                .copyWith(color: context.colorScheme.primary),
+          ),
         ),
       ),
     );

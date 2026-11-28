@@ -32,6 +32,7 @@ import 'pages/video_page.dart';
 import 'pages/vote_page.dart';
 import 'pages/web_page.dart';
 import 'widgets/common.dart';
+import 'widgets/copy_dialog.dart';
 
 void openStatus(BuildContext context, Status status) {
   openStatusById(context, status.id, status.mid, status: status);
@@ -218,6 +219,34 @@ void copyText(BuildContext context, String text) {
   showHoboToast(context, '已复制');
 }
 
+/// 一条微博可复制的正文：正文 + 转发的原文，和官方「复制」拼出来的一致。
+String statusCopyText(Status status) {
+  final body = status.plainText.trim();
+  final retweeted = status.retweeted;
+  if (retweeted == null) return body;
+  final name = retweeted.user?.name ?? '';
+  final quoted = retweeted.plainText.trim();
+  final line = name.isEmpty ? quoted : '//@$name：$quoted';
+  return [body, line].where((part) => part.isNotEmpty).join('\n\n');
+}
+
+/// 评论的长按菜单：回复、复制（可框选）。
+Future<void> showCommentActions(
+  BuildContext context,
+  Comment comment, {
+  VoidCallback? onReply,
+}) async {
+  final name = comment.user?.name ?? '';
+  await showHoboActionSheet(
+    context,
+    title: name.isEmpty ? '评论' : '@$name',
+    actions: [
+      if (onReply != null) ('回复', onReply),
+      ('复制评论', () => showHoboCopyDialog(context, comment.plainText)),
+    ],
+  );
+}
+
 /// 正文里的链接最终该进哪个页面。
 Future<void> handleLink(BuildContext context, String raw) async {
   var url = raw.trim();
@@ -322,7 +351,7 @@ Future<void> showStatusActions(BuildContext context, Status status) async {
     ),
     (
       '复制正文',
-      () => copyText(context, status.plainText),
+      () => showHoboCopyDialog(context, statusCopyText(status)),
     ),
     (
       '复制链接',

@@ -326,6 +326,72 @@ class HoboBarAction extends StatelessWidget {
   }
 }
 
+/// 可点选、也可单独点右侧「×」删除的胶囊标签。
+///
+/// `prism_ui` 的 [Chip] 把整枚胶囊的点击绑成了 `onDeleted ?? onPressed`，
+/// 同时传入两个回调时会吞掉点选动作；这里把标签主体和删除键拆成两个独立命中区。
+class HoboRemovableChip extends StatelessWidget {
+  const HoboRemovableChip({
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.onDeleted,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final VoidCallback? onDeleted;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = context.colorScheme;
+    final deletable = onDeleted != null;
+    return SizedBox(
+      height: TonalButtonSize.section.button,
+      child: Card(
+        shape: AppShape.full,
+        inert: onPressed == null,
+        padding: EdgeInsets.only(left: 16, right: deletable ? 4 : 16),
+        onPressed: onPressed,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.subheadline
+                    .of(context, emphasized: true)
+                    .copyWith(color: colorScheme.onSurface),
+              ),
+            ),
+            if (deletable) ...[
+              const SizedBox(width: 2),
+              Semantics(
+                container: true,
+                button: true,
+                label: '删除$label',
+                child: PressSurface(
+                  fill: const Color(0x00000000),
+                  shape: AppShape.full,
+                  padding: const EdgeInsets.all(6),
+                  onPressed: onDeleted,
+                  child: GlyphIcon(
+                    Glyphs.close,
+                    size: 16,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// 页面内容顶部留白：浮动标题栏的高度。
 double pageTopInset(BuildContext context) => context.appBarInset + 8;
 

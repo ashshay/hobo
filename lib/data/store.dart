@@ -456,6 +456,45 @@ class Store {
 
   void clearRecentSuperTopics() => _write('super_topics.json', const <Object>[]);
 
+  // ---- 超话当日签到记录（按账号 + 北京时间日期键保存） ----
+
+  Set<String> checkedInSuperTopics(String uid, String dateKey) {
+    if (uid.isEmpty || dateKey.isEmpty) return <String>{};
+    final root = _readObject('super_topic_checkins.json');
+    final entry = root[uid];
+    if (entry is! Map || entry['date']?.toString() != dateKey) {
+      return <String>{};
+    }
+    final raw = entry['ids'];
+    if (raw is! List) return <String>{};
+    return {
+      for (final item in raw)
+        if (item.toString().trim().isNotEmpty) item.toString().trim().toLowerCase(),
+    };
+  }
+
+  void markSuperTopicsCheckedIn(
+    String uid,
+    Iterable<String> containerIds,
+    String dateKey,
+  ) {
+    if (uid.isEmpty || dateKey.isEmpty) return;
+    final clean = <String>[
+      for (final raw in containerIds)
+        if (raw.trim().isNotEmpty) raw.trim().toLowerCase(),
+    ];
+    if (clean.isEmpty) return;
+    final root = _readObject('super_topic_checkins.json');
+    final current = checkedInSuperTopics(uid, dateKey);
+    final before = current.length;
+    current.addAll(clean);
+    final entry = root[uid];
+    final sameDate = entry is Map && entry['date']?.toString() == dateKey;
+    if (sameDate && current.length == before) return;
+    root[uid] = {'date': dateKey, 'ids': current.toList()};
+    _write('super_topic_checkins.json', root);
+  }
+
   // ---- 私信已读 ----
 
   String chatSeen(String uid) => _readObject('chat-seen.json')[uid]?.toString() ?? '';

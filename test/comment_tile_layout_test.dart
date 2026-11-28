@@ -60,34 +60,26 @@ void main() {
     expect(tester.getRect(short).left, closeTo(rect.left, 0.5));
   });
 
-  testWidgets('非卡片式：不要卡片底，条目之间拉一条浅色分隔线', (tester) async {
+  testWidgets('融合式：没有卡片底，正文、时间与楼中楼横条直接铺在页面上', (tester) async {
     await tester.pumpWidget(
       _host(
         CommentTile(
           comment: _comment(),
-          style: CommentStyle.flat,
-          showDivider: true,
+          style: CommentStyle.merged,
+          onOpenReplies: () {},
         ),
       ),
     );
     await tester.pump();
 
     expect(find.byType(HoboCard), findsNothing);
-    expect(find.byKey(const ValueKey('comment-divider')), findsOneWidget);
-    // 楼中楼仍是块状预览，标题行照 Bifu 的「昵称：正文」。
-    expect(find.textContaining('查看全部 7 条回复'), findsOneWidget);
-    expect(find.textContaining('一根筋两头堵'), findsOneWidget);
-    // 时间/来源落在正文右下那一行。
-    expect(find.textContaining('福建'), findsOneWidget);
-  });
-
-  testWidgets('非卡片式最后一条不画分隔线', (tester) async {
-    await tester.pumpWidget(
-      _host(CommentTile(comment: _comment(), style: CommentStyle.flat)),
-    );
-    await tester.pump();
-
+    // 融合式靠条目间距分隔，不再画分隔线。
     expect(find.byKey(const ValueKey('comment-divider')), findsNothing);
+    // 楼中楼收成一条横条，不再展开预览行。
+    expect(find.textContaining('查看全部 7 条回复'), findsOneWidget);
+    expect(find.textContaining('一根筋两头堵'), findsNothing);
+    // 时间/来源与点赞落在正文下面那一行。
+    expect(find.textContaining('福建'), findsOneWidget);
   });
 
   testWidgets('卡片式默认不带分隔线', (tester) async {

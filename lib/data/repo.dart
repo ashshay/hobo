@@ -60,6 +60,10 @@ const _favoriteListUrl = 'https://weibo.com/ajax/favorites/all_fav';
 /// 收藏夹一页固定 20 条，拿满就说明后面还有。
 const _favoritePageSize = 20;
 
+/// 超话签到接口：实测在网页登录态（无需 gsid）下可稳定完成签到并实时更新服务端状态。
+const _superTopicCheckInUrl = 'https://weibo.com/p/aj/general/button';
+const _superTopicCheckInApi = 'http://i.huati.weibo.com/aj/super/checkin';
+
 /// 「收藏」按钮的结果：[favorited] 是本地状态，[syncError] 非空说明微博收藏夹那次没写成功。
 class FavoriteToggle {
   const FavoriteToggle(this.favorited, [this.syncError]);
@@ -146,6 +150,11 @@ class Repo extends ChangeNotifier {
 
   /// 微博收藏夹那一侧的版本号：每写成功一次 +1，收藏页据此强制重拉。
   int onlineFavoritesVersion = 0;
+
+  /// 超话当日签到状态的版本号：每次签到成功或同步服务端已签状态 +1。
+  int superTopicCheckInVersion = 0;
+  String _superTopicCheckInKey = '';
+  Set<String> _checkedInSuperTopics = <String>{};
 
   final Map<String, bool> deletedStatusIds = {};
   int deletedVersion = 0;
@@ -442,6 +451,8 @@ class Repo extends ChangeNotifier {
     _cachedHotspotTopics = const [];
     _voteCache.clear();
     _statusVoteIdCache.clear();
+    _superTopicCheckInKey = '';
+    _checkedInSuperTopics = <String>{};
   }
 
   Future<void> updateSession(String cookie, String uid) async {
@@ -982,7 +993,7 @@ class Repo extends ChangeNotifier {
       }
       throw ApiException('超话加载失败');
     }
-    final page = tabId.toLowerCase() == '${id}_-_feed'
+    var page = tabId.toLowerCase() == '${id}_-_feed'
         ? parseSuperTopicPage(root, id)
         : parseSuperTopicPage(
             root,
@@ -990,10 +1001,154 @@ class Repo extends ChangeNotifier {
             tabContainerId: tabId,
             currentPage: pageNumber ?? 1,
           );
+    if (page.info.checkedIn) {
+      _recordSuperTopicsCheckedIn([id]);
+    } else if (isSuperTopicCheckedInToday(id)) {
+      page = SuperTopicPage(
+        info: page.info.copyWith(checkedIn: true),
+        items: page.items,
+        nextCursor: page.nextCursor,
+        tabs: page.tabs,
+      );
+    }
     if (tabId.toLowerCase().endsWith('_-_video') && page.items.isNotEmpty) {
       return _hydrateSuperTopicVideos(page);
     }
     return page;
+  }
+
+  /// 当前账号今日（北京时间）是否已在本地确认签到过该超话。
+  bool isSuperTopicCheckedInToday(String containerId) {
+    final id = normalizedSuperTopicId(containerId);
+    if (id == null) return false;
+    return _todayCheckedInSuperTopics().contains(id);
+  }
+
+  Set<String> _todayCheckedInSuperTopics() {
+    final uid = session?.uid ?? '';
+    if (uid.isEmpty) return const <String>{};
+    final dateKey = beijingDateKey();
+    final key = '$uid:$dateKey';
+    if (_superTopicCheckInKey != key) {
+      _superTopicCheckInKey = key;
+      _checkedInSuperTopics = store.checkedInSuperTopics(uid, dateKey);
+    }
+    return _checkedInSuperTopics;
+  }
+
+  void _recordSuperTopicsCheckedIn(
+    Iterable<String> containerIds, {
+    bool notify = false,
+  }) {
+    final uid = session?.uid ?? '';
+    if (uid.isEmpty) return;
+    final clean = <String>[
+      for (final raw in containerIds) ?normalizedSuperTopicId(raw),
+    ];
+    if (clean.isEmpty) return;
+    final dateKey = beijingDateKey();
+    final current = _todayCheckedInSuperTopics();
+    final before = current.length;
+    current.addAll(clean);
+    store.markSuperTopicsCheckedIn(uid, clean, dateKey);
+    if (notify || current.length != before) {
+      superTopicCheckInVersion++;
+      if (notify) _notify();
+    }
+  }
+
+  SuperTopicListPage _syncFollowedSuperTopicCheckIns(SuperTopicListPage page) {
+    final signed = <String>[
+      for (final item in page.items)
+        if (item.checkedIn == true) item.containerId,
+    ];
+    if (signed.isNotEmpty) {
+      _recordSuperTopicsCheckedIn(signed);
+    }
+    final today = _todayCheckedInSuperTopics();
+    if (today.isEmpty) return page;
+    final items = [
+      for (final item in page.items)
+        item.checkedIn != true && today.contains(item.containerId)
+            ? item.copyWith(checkedIn: true)
+            : item,
+    ];
+    return SuperTopicListPage(items: items, nextCursor: page.nextCursor);
+  }
+
+  /// 超话签到：走 `weibo.com/p/aj/general/button` 代理调用 `i.huati.weibo.com/aj/super/checkin`。
+  ///
+  /// 首次缺少或过期 `XSRF-TOKEN` 时自动预热一次 `weibo.com/` 再重试，与在线收藏同一套路。
+  Future<SuperTopicCheckInResult> checkInSuperTopic(String containerId) async {
+    final id = superTopicId(containerId);
+    if (id == null) throw ApiException('无效的超话地址');
+    if (!hasSession()) throw ApiException(_loginRequired);
+
+    var warmed = _desktopXsrf().isNotEmpty;
+    if (!warmed) {
+      await _warmDesktopXsrf(_desktopCookie());
+      warmed = true;
+    }
+
+    while (true) {
+      try {
+        final target = Api.url(_superTopicCheckInUrl, {
+          'ajwvr': '6',
+          'api': _superTopicCheckInApi,
+          'texta': '签到',
+          'textb': '已签到',
+          'status': '0',
+          'id': id,
+          'location': 'page_100808_super_index',
+          'timezone': 'GMT+0800',
+          'lang': 'zh-cn',
+          'plat': 'Win32',
+          'ua': Api.desktopUa,
+          'screen': '1920*1080',
+          '__rnd': '${DateTime.now().millisecondsSinceEpoch}',
+        });
+        final root = await Api.getDesktop(
+          target,
+          _desktopCookie(),
+          referer: 'https://weibo.com/p/$id/super_index',
+          xsrfToken: _desktopXsrf(),
+          origin: 'https://weibo.com',
+        );
+        final result = parseSuperTopicCheckIn(root, id);
+        _recordSuperTopicsCheckedIn([id], notify: true);
+        Api.cache?.invalidate(
+          Api.url('https://m.weibo.cn/api/container/getIndex', {
+            'containerid': '100803_-_followsuper',
+          }),
+          cookie(),
+        );
+        return result;
+      } on ApiHttpException catch (e) {
+        if (!warmed && (e.code == 400 || e.code == 403)) {
+          warmed = true;
+          await _warmDesktopXsrf(_desktopCookie());
+          continue;
+        }
+        final decoded = _decodeBody(e.body);
+        throw ApiException(
+          _firstNonEmpty([
+            decoded?.str('msg') ?? '',
+            decoded?.str('message') ?? '',
+            '签到失败（HTTP ${e.code}）',
+          ]),
+        );
+      } on ApiException catch (e) {
+        if (e.message == '响应不是 JSON') {
+          if (!warmed) {
+            warmed = true;
+            await _warmDesktopXsrf(_desktopCookie());
+            continue;
+          }
+          throw ApiException('签到失败，请重新登录微博账号后再试');
+        }
+        rethrow;
+      }
+    }
   }
 
   /// 超话「视频」流的卡片缺头图与可播放地址，按 mid 并发补全完整微博。
@@ -1052,7 +1207,9 @@ class Repo extends ChangeNotifier {
         _loginCookie(),
         force: force,
       );
-      final parsed = parseSuperTopicList(root, currentPage: pageNumber ?? 1);
+      final parsed = _syncFollowedSuperTopicCheckIns(
+        parseSuperTopicList(root, currentPage: pageNumber ?? 1),
+      );
       if (parsed.items.isNotEmpty || trimmed.isNotEmpty) return parsed;
     } on ApiException catch (e) {
       if (e.errno == '-100' || e.errno == '432') rethrow;
@@ -1073,7 +1230,9 @@ class Repo extends ChangeNotifier {
       }),
       _loginCookie(),
     );
-    final parsed = parseSuperTopicList(root, currentPage: page);
+    final parsed = _syncFollowedSuperTopicCheckIns(
+      parseSuperTopicList(root, currentPage: page),
+    );
     final next = parsed.nextCursor != null ? 'desktop:${page + 1}' : null;
     return SuperTopicListPage(items: parsed.items, nextCursor: next);
   }

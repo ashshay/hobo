@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:prism_ui/icons/icons.dart';
 import 'package:prism_ui/prism_ui.dart';
@@ -14,6 +16,7 @@ import '../widgets/feed_list.dart';
 import '../widgets/glyphs.dart';
 import '../widgets/pager.dart';
 import '../widgets/remote_image.dart';
+import '../widgets/super_topic_checkin_button.dart';
 
 /// 超话：资料头 + 栏目胶囊 + 微博流。栏目跟着胶囊一起横滑切换。
 class SuperTopicScreen extends StatefulWidget {
@@ -30,6 +33,7 @@ class _SuperTopicScreenState extends State<SuperTopicScreen>
   SuperTopicInfo? _info;
   List<SuperTopicTab> _tabs = const [];
   bool _loading = true;
+  bool _checkingIn = false;
   String? _error;
 
   /// 每个栏目一条流：切回来时已加载的内容和滚动位置都还在。
@@ -157,10 +161,58 @@ class _SuperTopicScreenState extends State<SuperTopicScreen>
       return;
     }
     _feedFor(tab).refresh();
+    unawaited(_refreshInfoSilently());
+  }
+
+  Future<void> _refreshInfoSilently() async {
+    try {
+      final page = await context.read<Repo>().superTopic(widget.containerId);
+      if (!mounted) return;
+      setState(() => _info = page.info);
+    } on Object {
+      // 头部信息静默刷新失败不影响当前浏览。
+    }
+  }
+
+  Future<void> _checkIn() async {
+    final info = _info;
+    if (info == null || _checkingIn) return;
+    final repo = context.read<Repo>();
+    if (!repo.hasSession()) {
+      showHoboToast(context, '请先登录后再签到', level: BannerLevel.warning);
+      return;
+    }
+    setState(() => _checkingIn = true);
+    try {
+      final result = await repo.checkInSuperTopic(info.containerId);
+      if (!mounted) return;
+      setState(() {
+        _checkingIn = false;
+        _info = (_info ?? info).copyWith(checkedIn: true);
+      });
+      showHoboToast(
+        context,
+        result.message,
+        level: result.alreadyCheckedIn
+            ? BannerLevel.info
+            : BannerLevel.success,
+      );
+      unawaited(_refreshInfoSilently());
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() => _checkingIn = false);
+      showHoboToast(
+        context,
+        e.toString().trim().isEmpty ? '签到失败' : e.toString(),
+        level: BannerLevel.error,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 监听全局当日签到版本号：在列表页或本页签完后立即同步按钮态。
+    context.select<Repo, int>((r) => r.superTopicCheckInVersion);
     final info = _info;
     final tabs = _tabs;
     return HoboPage(
@@ -228,6 +280,10 @@ class _SuperTopicScreenState extends State<SuperTopicScreen>
 
   Widget _pageFor(SuperTopicTab tab) {
     final info = _info;
+    final repo = context.read<Repo>();
+    final checkedIn =
+        info != null &&
+        (info.checkedIn || repo.isSuperTopicCheckedInToday(info.containerId));
     return StatusList(
       controller: _feedFor(tab),
       padding: EdgeInsets.fromLTRB(16, 4, 16, pageBottomInset(context)),
@@ -237,7 +293,12 @@ class _SuperTopicScreenState extends State<SuperTopicScreen>
           : [
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: _Header(info: info),
+                child: _Header(
+                  info: info,
+                  checkedIn: checkedIn,
+                  checkingIn: _checkingIn,
+                  onCheckIn: _checkIn,
+                ),
               ),
             ],
       emptyTitle: '这个栏目还没有内容',
@@ -254,14 +315,34 @@ class _SuperTopicScreenState extends State<SuperTopicScreen>
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.info});
+  const _Header({
+    required this.info,
+    required this.checkedIn,
+    required this.checkingIn,
+    required this.onCheckIn,
+  });
 
   final SuperTopicInfo info;
+  final bool checkedIn;
+  final bool checkingIn;
+  final VoidCallback onCheckIn;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = context.colorScheme;
+    final counts = [
+      if (info.readCount.isNotEmpty) '阅读 ${info.readCount}',
+      if (info.postCount.isNotEmpty) '帖子 ${info.postCount}',
+      if (info.fanCount.isNotEmpty) '粉丝 ${info.fanCount}',
+    ].join(' · ');
+    final fanMeta = [
+      if (info.levelText.isNotEmpty) info.levelText,
+      if (info.checkInText.isNotEmpty) info.checkInText,
+    ].join(' · ');
+
     return HoboCard(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Avatar(url: info.avatar, size: 54),
           const SizedBox(width: 12),
@@ -269,14 +350,27 @@ class _Header extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '#${info.title}#',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyle.headline.of(context).copyWith(
-                    fontSize: 17,
-                    color: context.colorScheme.onSurface,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '#${info.title}#',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyle.headline.of(context).copyWith(
+                          fontSize: 17,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SuperTopicCheckInButton(
+                      checkedIn: checkedIn,
+                      loading: checkingIn,
+                      onPressed: onCheckIn,
+                    ),
+                  ],
                 ),
                 if (info.description.isNotEmpty) ...[
                   const SizedBox(height: 4),
@@ -286,22 +380,30 @@ class _Header extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyle.footnote.of(context).copyWith(
                       fontSize: 12,
-                      color: context.colorScheme.onSurfaceVariant,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                 ],
-                const SizedBox(height: 6),
-                Text(
-                  [
-                    if (info.readCount.isNotEmpty) '阅读 ${info.readCount}',
-                    if (info.postCount.isNotEmpty) '帖子 ${info.postCount}',
-                    if (info.fanCount.isNotEmpty) '粉丝 ${info.fanCount}',
-                  ].join(' · '),
-                  style: AppTextStyle.caption1.of(context).copyWith(
-                    fontSize: 11,
-                    color: context.colorScheme.onSurfaceVariant,
+                if (counts.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    counts,
+                    style: AppTextStyle.caption1.of(context).copyWith(
+                      fontSize: 11,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
+                ],
+                if (fanMeta.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    fanMeta,
+                    style: AppTextStyle.caption1.of(context).copyWith(
+                      fontSize: 11,
+                      color: scheme.primary,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

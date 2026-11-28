@@ -12,6 +12,7 @@ import '../../data/store.dart';
 import '../../data/update.dart';
 import '../routes.dart';
 import '../widgets/app_icon.dart';
+import '../widgets/capsule.dart';
 import '../widgets/comment_tile.dart';
 import '../widgets/common.dart';
 import '../widgets/glyphs.dart';
@@ -217,20 +218,41 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
-          // 评论区样式 + 预览：预览渲染的就是详情页那个 CommentTile，改完立刻看得到。
-          HoboSection(
-            title: '评论区',
-            children: [
-              HoboRow(
-                title: '样式',
-                subtitle: settings.commentStyle.summary,
-                leading: const GlyphIcon(HoboGlyphs.comment, size: 20),
-                trailing: CommentStyleSwitch(
-                  value: settings.commentStyle,
-                  onChanged: settings.applyCommentStyle,
-                ),
+          // 评论区样式 + 预览：与 TiebaFrosted 同一套模块——一段胶囊切换 + 一句说明，
+          // 预览渲染的就是详情页那个 CommentTile，改完立刻看得到。
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 18, 16, 8),
+            child: Text(
+              '评论区样式',
+              style: AppTextStyle.footnote
+                  .of(context, emphasized: true)
+                  .copyWith(color: context.colorScheme.onSurfaceVariant),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: HoboCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  HoboCapsule<CommentStyle>(
+                    value: settings.commentStyle,
+                    onChanged: settings.applyCommentStyle,
+                    segments: const [
+                      (CommentStyle.card, '卡片'),
+                      (CommentStyle.merged, '融合'),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    settings.commentStyle.summary,
+                    style: AppTextStyle.caption1.of(context).copyWith(
+                      color: context.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
           CommentStylePreview(style: settings.commentStyle),
           HoboSection(
@@ -963,57 +985,6 @@ class _AccentDialogState extends State<_AccentDialog> {
   }
 }
 
-/// 评论区样式的两段式切换：选中那颗用强调色填底。
-class CommentStyleSwitch extends StatelessWidget {
-  const CommentStyleSwitch({
-    super.key,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final CommentStyle value;
-  final ValueChanged<CommentStyle> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = context.colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(2),
-      decoration: ShapeDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-        shape: AppShape.full,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final option in CommentStyle.values)
-            PressSurface(
-              fill: option == value ? scheme.primary : const Color(0x00000000),
-              shape: AppShape.full,
-              onPressed: () => onChanged(option),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 4,
-                ),
-                child: Text(
-                  option.label,
-                  style: AppTextStyle.caption1.of(context).copyWith(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: option == value
-                        ? scheme.onPrimary
-                        : scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 /// 评论区样式预览：渲染的就是详情页那个 [CommentTile]，样例文字和博主固定。
 class CommentStylePreview extends StatelessWidget {
   const CommentStylePreview({super.key, required this.style});
@@ -1027,6 +998,7 @@ class CommentStylePreview extends StatelessWidget {
     user: _author,
     createdAt: '刚刚',
     likes: 42,
+    replyCount: 3,
   );
 
   @override
@@ -1061,6 +1033,7 @@ class CommentStylePreview extends StatelessWidget {
             comment: _comment,
             authorId: _author.id,
             style: style,
+            onOpenReplies: () {},
           ),
         ],
       ),

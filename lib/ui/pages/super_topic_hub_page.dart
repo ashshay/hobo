@@ -19,6 +19,7 @@ import '../widgets/glyphs.dart';
 import '../widgets/pager.dart';
 import '../widgets/refresh.dart';
 import '../widgets/remote_image.dart';
+import '../widgets/super_topic_checkin_button.dart';
 
 enum _HubTab { mine, plaza }
 
@@ -53,6 +54,12 @@ class _SuperTopicHubPageState extends State<SuperTopicHubPage>
   bool _mineEnd = false;
   String? _mineError;
   bool _mineLoginRequired = false;
+
+  // 签到状态
+  final Set<String> _checkingIds = {};
+  bool _batchChecking = false;
+  int _batchDone = 0;
+  int _batchTotal = 0;
 
   // 超话广场
   List<SuperTopicSummary> _plaza = const [];
@@ -242,6 +249,157 @@ class _SuperTopicHubPageState extends State<SuperTopicHubPage>
     if (mounted) _reloadRecent();
   }
 
+  bool _isCheckedIn(Repo repo, SuperTopicSummary topic) =>
+      topic.checkedIn == true || repo.isSuperTopicCheckedInToday(topic.containerId);
+
+  void _markMineCheckedIn(String containerId) {
+    final lower = containerId.toLowerCase();
+    var changed = false;
+    final updated = [
+      for (final item in _mine)
+        if (item.containerId.toLowerCase() == lower && item.checkedIn != true)
+          () {
+            changed = true;
+            return item.copyWith(checkedIn: true);
+          }()
+        else
+          item,
+    ];
+    if (changed) _mine = updated;
+  }
+
+  Future<void> _checkInOne(SuperTopicSummary topic) async {
+    final id = topic.containerId;
+    if (id.isEmpty || _checkingIds.contains(id) || _batchChecking) return;
+    final repo = context.read<Repo>();
+    if (!repo.hasSession()) {
+      showHoboToast(context, '请先登录后再签到', level: BannerLevel.warning);
+      return;
+    }
+    setState(() => _checkingIds.add(id));
+    try {
+      final result = await repo.checkInSuperTopic(id);
+      if (!mounted) return;
+      setState(() {
+        _checkingIds.remove(id);
+        _markMineCheckedIn(id);
+      });
+      showHoboToast(
+        context,
+        '${topic.title} · ${result.message}',
+        level: result.alreadyCheckedIn
+            ? BannerLevel.info
+            : BannerLevel.success,
+      );
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() => _checkingIds.remove(id));
+      showHoboToast(
+        context,
+        e.toString().trim().isEmpty ? '签到失败' : e.toString(),
+        level: BannerLevel.error,
+      );
+    }
+  }
+
+  Future<void> _checkInAll() async {
+    if (_batchChecking) return;
+    final repo = context.read<Repo>();
+    if (!repo.hasSession()) {
+      showHoboToast(context, '请先登录后再签到', level: BannerLevel.warning);
+      return;
+    }
+    setState(() {
+      _batchChecking = true;
+      _batchDone = 0;
+      _batchTotal = 0;
+    });
+    try {
+      // 先把关注超话的剩余分页拉齐（最多 10 页），尽量覆盖全部关注的超话。
+      var extraPages = 0;
+      while (mounted && !_mineEnd && _mineCursor != null && extraPages < 10) {
+        final prevCursor = _mineCursor;
+        await _loadMine(refresh: false);
+        extraPages++;
+        if (_mineError != null || _mineCursor == prevCursor) break;
+      }
+      if (!mounted) return;
+      final targets = [
+        for (final item in _mine)
+          if (!_isCheckedIn(repo, item)) item,
+      ];
+      if (targets.isEmpty) {
+        setState(() => _batchChecking = false);
+        showHoboToast(context, '关注的超话今天都已签到');
+        return;
+      }
+      setState(() => _batchTotal = targets.length);
+      var succeeded = 0;
+      var already = 0;
+      var failed = 0;
+      String? stopReason;
+      for (var i = 0; i < targets.length; i++) {
+        if (!mounted) return;
+        final topic = targets[i];
+        setState(() => _checkingIds.add(topic.containerId));
+        try {
+          final result = await repo.checkInSuperTopic(topic.containerId);
+          if (!mounted) return;
+          if (result.alreadyCheckedIn) {
+            already++;
+          } else {
+            succeeded++;
+          }
+          setState(() {
+            _checkingIds.remove(topic.containerId);
+            _markMineCheckedIn(topic.containerId);
+            _batchDone = i + 1;
+          });
+        } on Object catch (e) {
+          if (!mounted) return;
+          failed++;
+          final msg = e.toString();
+          setState(() {
+            _checkingIds.remove(topic.containerId);
+            _batchDone = i + 1;
+          });
+          if (msg.contains('频繁') ||
+              msg.contains('过快') ||
+              msg.contains('20016') ||
+              msg.contains('登录')) {
+            stopReason = msg;
+            break;
+          }
+        }
+        // 连续请求之间稍微间隔，降低触发微博频率限制的概率。
+        if (i + 1 < targets.length) {
+          await Future<void>.delayed(const Duration(milliseconds: 650));
+        }
+      }
+      if (!mounted) return;
+      setState(() => _batchChecking = false);
+      final parts = <String>[
+        if (succeeded > 0) '新签 $succeeded 个',
+        if (already > 0) '已签 $already 个',
+        if (failed > 0) '失败 $failed 个',
+      ];
+      final summary = parts.isEmpty ? '没有需要签到的超话' : '一键签到完成：${parts.join('，')}';
+      showHoboToast(
+        context,
+        stopReason == null ? summary : '$summary（$stopReason）',
+        level: failed > 0
+            ? BannerLevel.warning
+            : succeeded > 0
+            ? BannerLevel.success
+            : BannerLevel.info,
+      );
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() => _batchChecking = false);
+      showHoboToast(context, e.toString(), level: BannerLevel.error);
+    }
+  }
+
   Future<void> _submit(String raw) async {
     final text = raw.trim();
     if (text.isEmpty) return;
@@ -363,6 +521,8 @@ class _SuperTopicHubPageState extends State<SuperTopicHubPage>
 
   @override
   Widget build(BuildContext context) {
+    // 详情页签到后返回列表页时自动同步按钮状态。
+    context.select<Repo, int>((r) => r.superTopicCheckInVersion);
     return PrismScaffold(
       bar: HoboAppBar(
         leading: const HoboBackButton(),
@@ -546,7 +706,7 @@ class _SuperTopicHubPageState extends State<SuperTopicHubPage>
                 runSpacing: 8,
                 children: [
                   for (final item in _recent.take(12))
-                    Chip(
+                    HoboRemovableChip(
                       label: item.title,
                       onPressed: () => _openAndRemember(item),
                       onDeleted: () {
@@ -599,22 +759,78 @@ class _SuperTopicHubPageState extends State<SuperTopicHubPage>
                 ),
               )
             else ...[
-              if (_recent.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    '我关注的超话',
-                    style: AppTextStyle.headline.of(context).copyWith(
-                      fontSize: 14,
-                      color: context.colorScheme.onSurface,
+              Builder(
+                builder: (context) {
+                  final repo = context.read<Repo>();
+                  final unsignedCount = _mine
+                      .where((item) => !_isCheckedIn(repo, item))
+                      .length;
+                  final actionLabel = _batchChecking
+                      ? (_batchTotal > 0
+                            ? '签到中 $_batchDone/$_batchTotal'
+                            : '准备签到…')
+                      : (unsignedCount == 0 && _mineEnd
+                            ? '今日已全部签到'
+                            : '一键签到');
+                  final canBatch =
+                      !_batchChecking && !(unsignedCount == 0 && _mineEnd);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          '我关注的超话',
+                          style: AppTextStyle.headline.of(context).copyWith(
+                            fontSize: 14,
+                            color: context.colorScheme.onSurface,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (_batchChecking) ...[
+                          const ActivityIndicator(size: 13),
+                          const SizedBox(width: 6),
+                        ],
+                        if (canBatch)
+                          HoboBarAction(
+                            label: actionLabel,
+                            onPressed: _checkInAll,
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              actionLabel,
+                              style: AppTextStyle.footnote
+                                  .of(context, emphasized: true)
+                                  .copyWith(
+                                    color: context.colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                ),
+                  );
+                },
+              ),
               for (var i = 0; i < _mine.length; i++) ...[
                 if (i > 0) const SizedBox(height: 8),
-                _SuperTopicCard(
-                  topic: _mine[i],
-                  onTap: () => _openAndRemember(_mine[i]),
+                Builder(
+                  builder: (context) {
+                    final item = _mine[i];
+                    final repo = context.read<Repo>();
+                    final checkedIn = _isCheckedIn(repo, item);
+                    return _SuperTopicCard(
+                      topic: item,
+                      showCheckIn: true,
+                      checkedIn: checkedIn,
+                      checkingIn: _checkingIds.contains(item.containerId),
+                      onCheckIn: () => _checkInOne(item),
+                      onTap: () => _openAndRemember(item),
+                    );
+                  },
                 ),
               ],
               HoboListFooter(loading: _mineLoading, atEnd: _mineEnd),
@@ -688,10 +904,21 @@ class _SuperTopicHubPageState extends State<SuperTopicHubPage>
 }
 
 class _SuperTopicCard extends StatelessWidget {
-  const _SuperTopicCard({required this.topic, required this.onTap});
+  const _SuperTopicCard({
+    required this.topic,
+    required this.onTap,
+    this.showCheckIn = false,
+    this.checkedIn = false,
+    this.checkingIn = false,
+    this.onCheckIn,
+  });
 
   final SuperTopicSummary topic;
   final VoidCallback onTap;
+  final bool showCheckIn;
+  final bool checkedIn;
+  final bool checkingIn;
+  final VoidCallback? onCheckIn;
 
   @override
   Widget build(BuildContext context) {
@@ -760,11 +987,19 @@ class _SuperTopicCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          GlyphIcon(
-            Glyphs.chevronForward,
-            size: 18,
-            color: scheme.onSurfaceVariant,
-          ),
+          if (showCheckIn)
+            SuperTopicCheckInButton(
+              checkedIn: checkedIn,
+              loading: checkingIn,
+              onPressed: onCheckIn,
+              compact: true,
+            )
+          else
+            GlyphIcon(
+              Glyphs.chevronForward,
+              size: 18,
+              color: scheme.onSurfaceVariant,
+            ),
         ],
       ),
     );
